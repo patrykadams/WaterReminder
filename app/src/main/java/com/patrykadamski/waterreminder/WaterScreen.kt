@@ -1,5 +1,9 @@
 package com.patrykadamski.waterreminder.com.patrykadamski.waterreminder
 
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
@@ -12,12 +16,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -37,21 +43,27 @@ import com.patrykadamski.waterreminder.WaterViewModel
 fun WaterReminderScreen(viewModel: WaterViewModel) {
     val context = LocalContext.current
 
-    // UI pobiera dane od Managera, a nie trzyma ich samo
+    // Dane z ViewModelu (licznik + historia)
     val waterIntake = viewModel.waterIntake
+    val historyRecords = viewModel.records // <--- To jest nasza nowa lista
     val dailyGoal = 2000
 
     val progress = (waterIntake.toFloat() / dailyGoal.toFloat()).coerceIn(0f, 1f)
     val animatedProgress by animateFloatAsState(targetValue = progress, label = "progress")
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
+        // Usunąłem "Arrangement.Center", żeby lista zmieściła się na dole
     ) {
+        Spacer(modifier = Modifier.height(20.dp))
         Text("Cel dzienny: $dailyGoal ml", style = MaterialTheme.typography.titleMedium)
+
         Spacer(modifier = Modifier.height(30.dp))
 
+        // --- SEKCJA 1: LICZNIK (Bez zmian) ---
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(200.dp)) {
             CircularProgressIndicator(
                 progress = { animatedProgress },
@@ -67,23 +79,54 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
             }
         }
 
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(30.dp))
 
+        // --- SEKCJA 2: PRZYCISKI (Bez zmian) ---
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            // Przyciski zlecają pracę Managerowi
             Button(onClick = { viewModel.addWater(250) }) { Text("+250 ml") }
             Button(onClick = { viewModel.addWater(500) }) { Text("+500 ml") }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        TextButton(onClick = { viewModel.resetWater() }) { Text("Resetuj licznik") }
 
-        Spacer(modifier = Modifier.height(30.dp))
-        Button(
-            onClick = { scheduleNotification(context) },
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            TextButton(onClick = { viewModel.resetWater() }) { Text("Reset") }
+            TextButton(onClick = { scheduleNotification(context) }) { Text("Test Powiadomienia") }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+        Divider() // Linia oddzielająca
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // --- SEKCJA 3: HISTORIA (Nowość!) ---
+        Text(
+            text = "Ostatnie 7 dni:",
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.align(Alignment.Start)
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Lista przewijana (LazyColumn)
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Test powiadomienia (10s)")
+            items(historyRecords) { record ->
+                // Wygląd jednego wiersza w historii
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD)) // Jasnoniebieski
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(text = record.date, fontWeight = FontWeight.Bold)
+                        Text(text = "${record.amount} ml", color = Color(0xFF1976D2))
+                    }
+                }
+            }
         }
     }
 }

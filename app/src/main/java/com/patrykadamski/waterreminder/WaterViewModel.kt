@@ -3,6 +3,7 @@ package com.patrykadamski.waterreminder
 import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf // Nowy import
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,34 +12,34 @@ import java.time.LocalDate
 
 class WaterViewModel(application: Application) : AndroidViewModel(application) {
 
-    // Stan licznika widoczny dla ekranu
     var waterIntake by mutableIntStateOf(0)
         private set
 
-    // Dostęp do bazy danych
+    // NOWE: Lista z historią do wyświetlenia na ekranie
+    var records by mutableStateOf(listOf<WaterEntity>())
+        private set
+
     private val dao = WaterDatabase.getDatabase(application).waterDao()
-    private val todayDate = LocalDate.now().toString() // Np. "2023-10-27"
+    private val todayDate = LocalDate.now().toString()
 
     init {
-        // AUTOMATYCZNIE przy starcie: Wczytaj wynik z dzisiaj
-        loadTodayWater()
+        refreshData()
     }
 
-    private fun loadTodayWater() {
+    // Połączyliśmy wczytywanie dzisiejszej wody i historii w jedną funkcję
+    private fun refreshData() {
         viewModelScope.launch {
+            // 1. Pobierz dzisiejszy wynik
             val entry = dao.getTodayWater(todayDate)
-            if (entry != null) {
-                waterIntake = entry.amount
-            } else {
-                waterIntake = 0
-            }
+            waterIntake = entry?.amount ?: 0
+
+            // 2. Pobierz historię
+            records = dao.getLast7Days()
         }
     }
 
     fun addWater(amount: Int) {
-        // 1. Zmień na ekranie
         waterIntake += amount
-        // 2. Zapisz w bazie
         saveToDatabase()
     }
 
@@ -51,6 +52,7 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val entity = WaterEntity(date = todayDate, amount = waterIntake)
             dao.insert(entity)
+            refreshData() // Odśwież listę po zapisaniu
         }
     }
 }

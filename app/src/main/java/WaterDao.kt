@@ -7,12 +7,13 @@ import androidx.room.Query
 
 @Dao
 interface WaterDao {
-    // Kelnerze, przynieś mi wynik z dzisiaj!
-    // (SQL: Wybierz wszystko z tabeli, gdzie data to dzisiaj, daj tylko 1 wynik)
     @Query("SELECT * FROM water_table WHERE date = :todayDate LIMIT 1")
     suspend fun getTodayWater(todayDate: String): WaterEntity?
 
-    // Kelnerze, zapisz to! A jak już jest wpis z tą datą, to go nadpisz (REPLACE).
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(water: WaterEntity)
+
+    // --- NOWA LINIA: Pobierz historię (sortuj od najnowszej) ---
+    @Query("SELECT * FROM water_table ORDER BY date DESC LIMIT 7")
+    suspend fun getLast7Days(): List<WaterEntity>
 }
