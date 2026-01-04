@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -30,7 +31,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    WaterReminderScreen()
+                    // TU JEST ZMIANA: Tworzymy Managera (ViewModel)
+                    val viewModel: WaterViewModel = viewModel()
+                    WaterReminderScreen(viewModel)
                 }
             }
         }
@@ -46,9 +49,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun WaterReminderScreen() {
+fun WaterReminderScreen(viewModel: WaterViewModel) {
     val context = LocalContext.current
-    var waterIntake by remember { mutableIntStateOf(0) }
+
+    // UI pobiera dane od Managera, a nie trzyma ich samo
+    val waterIntake = viewModel.waterIntake
     val dailyGoal = 2000
 
     val progress = (waterIntake.toFloat() / dailyGoal.toFloat()).coerceIn(0f, 1f)
@@ -61,6 +66,7 @@ fun WaterReminderScreen() {
     ) {
         Text("Cel dzienny: $dailyGoal ml", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(30.dp))
+
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(200.dp)) {
             CircularProgressIndicator(
                 progress = { animatedProgress },
@@ -75,13 +81,18 @@ fun WaterReminderScreen() {
                 Text("ml", style = MaterialTheme.typography.bodyLarge)
             }
         }
+
         Spacer(modifier = Modifier.height(40.dp))
+
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Button(onClick = { waterIntake += 250 }) { Text("+250 ml") }
-            Button(onClick = { waterIntake += 500 }) { Text("+500 ml") }
+            // Przyciski zlecają pracę Managerowi
+            Button(onClick = { viewModel.addWater(250) }) { Text("+250 ml") }
+            Button(onClick = { viewModel.addWater(500) }) { Text("+500 ml") }
         }
+
         Spacer(modifier = Modifier.height(16.dp))
-        TextButton(onClick = { waterIntake = 0 }) { Text("Resetuj licznik") }
+        TextButton(onClick = { viewModel.resetWater() }) { Text("Resetuj licznik") }
+
         Spacer(modifier = Modifier.height(30.dp))
         Button(
             onClick = { scheduleNotification(context) },
@@ -94,7 +105,6 @@ fun WaterReminderScreen() {
 
 fun scheduleNotification(context: Context) {
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    // Jeśli tutaj masz błąd "Unresolved reference: ReminderReceiver", wykonaj Krok 2
     val intent = Intent(context, ReminderReceiver::class.java)
     val pendingIntent = PendingIntent.getBroadcast(
         context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
