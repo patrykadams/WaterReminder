@@ -13,18 +13,18 @@ import java.time.LocalDate
 
 class WaterViewModel(application: Application) : AndroidViewModel(application) {
 
-    // 1. "Notatnik" do zapisywania celu (SharedPreferences)
     private val prefs = application.getSharedPreferences("water_prefs", Context.MODE_PRIVATE)
 
-    // 2. Stan licznika wody
     var waterIntake by mutableIntStateOf(0)
         private set
 
-    // 3. Stan Celu (Wczytaj z notatnika, a jak pusto to domyślnie 2000)
     var dailyGoal by mutableIntStateOf(prefs.getInt("daily_goal", 2000))
         private set
 
-    // 4. Historia
+    // NOWOŚĆ: Częstotliwość powiadomień w minutach (domyślnie 60 min)
+    var alertInterval by mutableIntStateOf(prefs.getInt("alert_interval", 60))
+        private set
+
     var records by mutableStateOf(listOf<WaterEntity>())
         private set
 
@@ -53,10 +53,15 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
         saveToDatabase()
     }
 
-    // --- NOWA FUNKCJA: Zmień cel i zapisz go na stałe ---
     fun changeGoal(newGoal: Int) {
         dailyGoal = newGoal
         prefs.edit().putInt("daily_goal", newGoal).apply()
+    }
+
+    // NOWOŚĆ: Funkcja do zmiany częstotliwości
+    fun changeInterval(newInterval: Int) {
+        alertInterval = newInterval
+        prefs.edit().putInt("alert_interval", newInterval).apply()
     }
 
     private fun saveToDatabase() {

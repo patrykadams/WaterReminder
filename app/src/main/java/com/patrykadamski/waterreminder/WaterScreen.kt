@@ -23,12 +23,14 @@ import androidx.compose.ui.unit.dp
 fun WaterReminderScreen(viewModel: WaterViewModel) {
     val context = LocalContext.current
 
-    // 1. Pobieramy dane z Managera (teraz cel jest zmienny!)
+    // 1. Pobieramy dane z Managera
     val waterIntake = viewModel.waterIntake
     val dailyGoal = viewModel.dailyGoal
     val historyRecords = viewModel.records
+    // Pobieramy interwał (częstotliwość) z ViewModelu
+    val currentInterval = viewModel.alertInterval
 
-    // 2. Stan: Czy pokazać okienko zmiany celu? (Domyślnie false - ukryte)
+    // 2. Stan: Czy pokazać okienko zmiany celu?
     var showDialog by remember { mutableStateOf(false) }
 
     val progress = (waterIntake.toFloat() / dailyGoal.toFloat()).coerceIn(0f, 1f)
@@ -42,20 +44,20 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
     ) {
         Spacer(modifier = Modifier.height(20.dp))
 
-        // --- ZMIANA: Wiersz z tekstem celu i ikonką ustawień ---
+        // --- NAGŁÓWEK: Cel + Ustawienia ---
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
             Text("Cel: $dailyGoal ml", style = MaterialTheme.typography.titleMedium)
             IconButton(onClick = { showDialog = true }) {
-                Icon(Icons.Default.Settings, contentDescription = "Zmień cel")
+                Icon(Icons.Default.Settings, contentDescription = "Ustawienia")
             }
         }
 
         Spacer(modifier = Modifier.height(30.dp))
 
-        // --- LICZNIK (Bez zmian) ---
+        // --- LICZNIK (Kółko) ---
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(200.dp)) {
             CircularProgressIndicator(
                 progress = { animatedProgress },
@@ -73,7 +75,7 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
 
         Spacer(modifier = Modifier.height(30.dp))
 
-        // --- PRZYCISKI (Bez zmian) ---
+        // --- PRZYCISKI DODAWANIA WODY ---
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Button(onClick = { viewModel.addWater(250) }) { Text("+250 ml") }
             Button(onClick = { viewModel.addWater(500) }) { Text("+500 ml") }
@@ -81,16 +83,18 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // --- PRZYCISKI RESET I TEST ---
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             TextButton(onClick = { viewModel.resetWater() }) { Text("Reset") }
-            TextButton(onClick = { scheduleNotification(context) }) { Text("Test Powiadomienia") }
+            // Przycisk uruchamia pętlę powiadomień
+            TextButton(onClick = { scheduleNotification(context) }) { Text("Start Powiadomień") }
         }
 
         Spacer(modifier = Modifier.height(20.dp))
         Divider()
         Spacer(modifier = Modifier.height(10.dp))
 
-        // --- HISTORIA (Bez zmian) ---
+        // --- HISTORIA ---
         Text(
             text = "Ostatnie 7 dni:",
             style = MaterialTheme.typography.titleSmall,
@@ -118,40 +122,65 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
         }
     }
 
-    // --- NOWOŚĆ: Logika wyświetlania okienka ---
+    // --- LOGIKA OKIENKA (DIALOG) ---
     if (showDialog) {
         EditGoalDialog(
             currentGoal = dailyGoal,
+            currentInterval = currentInterval,
             onDismiss = { showDialog = false },
-            onConfirm = { newGoal ->
-                viewModel.changeGoal(newGoal) // Zapisz nowy cel w Managerze
-                showDialog = false // Zamknij okno
+            onConfirm = { newGoal, newInterval ->
+                // Zapisujemy nowe ustawienia w ViewModel
+                viewModel.changeGoal(newGoal)
+                viewModel.changeInterval(newInterval)
+                showDialog = false
+
+                // Opcjonalnie: Restartujemy harmonogram z nowym czasem
+                scheduleNotification(context)
             }
         )
     }
 }
 
-// Pomocnicza funkcja rysująca okienko
+// --- FUNKCJA RYSUJĄCA OKIENKO ---
 @Composable
-fun EditGoalDialog(currentGoal: Int, onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
-    var text by remember { mutableStateOf(currentGoal.toString()) }
+fun EditGoalDialog(
+    currentGoal: Int,
+    currentInterval: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int, Int) -> Unit
+) {
+    var goalText by remember { mutableStateOf(currentGoal.toString()) }
+    var intervalText by remember { mutableStateOf(currentInterval.toString()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Ustaw cel dzienny") },
+        title = { Text("Ustawienia") },
         text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it.filter { char -> char.isDigit() } }, // Pozwól wpisać tylko cyfry
-                label = { Text("Mililitry") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true
-            )
+            Column {
+                Text("Dzienny cel (ml):")
+                OutlinedTextField(
+                    value = goalText,
+                    onValueChange = { goalText = it.filter { c -> c.isDigit() } },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text("Przypomnienie co (minuty):")
+                OutlinedTextField(
+                    value = intervalText,
+                    onValueChange = { intervalText = it.filter { c -> c.isDigit() } },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    placeholder = { Text("np. 60") }
+                )
+            }
         },
         confirmButton = {
             Button(onClick = {
-                val number = text.toIntOrNull() ?: 2000
-                onConfirm(number)
+                val newGoal = goalText.toIntOrNull() ?: 2000
+                val newInterval = intervalText.toIntOrNull() ?: 60
+                onConfirm(newGoal, newInterval)
             }) {
                 Text("Zapisz")
             }
@@ -164,20 +193,24 @@ fun EditGoalDialog(currentGoal: Int, onDismiss: () -> Unit, onConfirm: (Int) -> 
     )
 }
 
-// Funkcja powiadomień zostaje bez zmian, ale musi tu być, żeby kod się kompilował
+// --- FUNKCJA STARTUJĄCA POWIADOMIENIA ---
 fun scheduleNotification(context: Context) {
-    // Tę funkcję powinieneś już mieć w tym pliku na samym dole - zostaw ją tak jak była,
-    // albo wklej z poprzednich kroków, jeśli ją usunąłeś.
-    // Dla porządku przypominam, że ona tu jest potrzebna :)
+    val prefs = context.getSharedPreferences("water_prefs", Context.MODE_PRIVATE)
+    val intervalMinutes = prefs.getInt("alert_interval", 60)
+
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
     val intent = android.content.Intent(context, ReminderReceiver::class.java)
     val pendingIntent = android.app.PendingIntent.getBroadcast(
         context, 0, intent, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
     )
-    val triggerTime = System.currentTimeMillis() + 10_000
+
+    // Ustawiamy start za 5 sekund
+    // a potem ReminderReceiver sam ustawi kolejne za 'intervalMinutes'
+    val triggerTime = System.currentTimeMillis() + 5_000
+
     try {
         alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-        android.widget.Toast.makeText(context, "Przypomnienie ustawione!", android.widget.Toast.LENGTH_SHORT).show()
+        android.widget.Toast.makeText(context, "Start za 5s (Pętla co $intervalMinutes min)", android.widget.Toast.LENGTH_LONG).show()
     } catch (e: SecurityException) {
         android.widget.Toast.makeText(context, "Brak uprawnień!", android.widget.Toast.LENGTH_SHORT).show()
     }
