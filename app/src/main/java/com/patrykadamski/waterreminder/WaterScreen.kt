@@ -1,52 +1,35 @@
-package com.patrykadamski.waterreminder.com.patrykadamski.waterreminder
+package com.patrykadamski.waterreminder
 
+import android.content.Context
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import android.app.AlarmManager
-import android.app.PendingIntent
-import android.content.Context
-import android.content.Intent
-import android.widget.Toast
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.patrykadamski.waterreminder.ReminderReceiver
-import com.patrykadamski.waterreminder.WaterViewModel
 
 @Composable
 fun WaterReminderScreen(viewModel: WaterViewModel) {
     val context = LocalContext.current
 
-    // Dane z ViewModelu (licznik + historia)
+    // 1. Pobieramy dane z Managera (teraz cel jest zmienny!)
     val waterIntake = viewModel.waterIntake
-    val historyRecords = viewModel.records // <--- To jest nasza nowa lista
-    val dailyGoal = 2000
+    val dailyGoal = viewModel.dailyGoal
+    val historyRecords = viewModel.records
+
+    // 2. Stan: Czy pokazać okienko zmiany celu? (Domyślnie false - ukryte)
+    var showDialog by remember { mutableStateOf(false) }
 
     val progress = (waterIntake.toFloat() / dailyGoal.toFloat()).coerceIn(0f, 1f)
     val animatedProgress by animateFloatAsState(targetValue = progress, label = "progress")
@@ -56,14 +39,23 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
             .fillMaxSize()
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
-        // Usunąłem "Arrangement.Center", żeby lista zmieściła się na dole
     ) {
         Spacer(modifier = Modifier.height(20.dp))
-        Text("Cel dzienny: $dailyGoal ml", style = MaterialTheme.typography.titleMedium)
+
+        // --- ZMIANA: Wiersz z tekstem celu i ikonką ustawień ---
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text("Cel: $dailyGoal ml", style = MaterialTheme.typography.titleMedium)
+            IconButton(onClick = { showDialog = true }) {
+                Icon(Icons.Default.Settings, contentDescription = "Zmień cel")
+            }
+        }
 
         Spacer(modifier = Modifier.height(30.dp))
 
-        // --- SEKCJA 1: LICZNIK (Bez zmian) ---
+        // --- LICZNIK (Bez zmian) ---
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(200.dp)) {
             CircularProgressIndicator(
                 progress = { animatedProgress },
@@ -81,7 +73,7 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
 
         Spacer(modifier = Modifier.height(30.dp))
 
-        // --- SEKCJA 2: PRZYCISKI (Bez zmian) ---
+        // --- PRZYCISKI (Bez zmian) ---
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Button(onClick = { viewModel.addWater(250) }) { Text("+250 ml") }
             Button(onClick = { viewModel.addWater(500) }) { Text("+500 ml") }
@@ -95,10 +87,10 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
         }
 
         Spacer(modifier = Modifier.height(20.dp))
-        Divider() // Linia oddzielająca
+        Divider()
         Spacer(modifier = Modifier.height(10.dp))
 
-        // --- SEKCJA 3: HISTORIA (Nowość!) ---
+        // --- HISTORIA (Bez zmian) ---
         Text(
             text = "Ostatnie 7 dni:",
             style = MaterialTheme.typography.titleSmall,
@@ -106,16 +98,12 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Lista przewijana (LazyColumn)
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(historyRecords) { record ->
-                // Wygląd jednego wiersza w historii
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD)) // Jasnoniebieski
-                ) {
+                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD))) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -129,19 +117,68 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
             }
         }
     }
+
+    // --- NOWOŚĆ: Logika wyświetlania okienka ---
+    if (showDialog) {
+        EditGoalDialog(
+            currentGoal = dailyGoal,
+            onDismiss = { showDialog = false },
+            onConfirm = { newGoal ->
+                viewModel.changeGoal(newGoal) // Zapisz nowy cel w Managerze
+                showDialog = false // Zamknij okno
+            }
+        )
+    }
 }
 
+// Pomocnicza funkcja rysująca okienko
+@Composable
+fun EditGoalDialog(currentGoal: Int, onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
+    var text by remember { mutableStateOf(currentGoal.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Ustaw cel dzienny") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it.filter { char -> char.isDigit() } }, // Pozwól wpisać tylko cyfry
+                label = { Text("Mililitry") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            Button(onClick = {
+                val number = text.toIntOrNull() ?: 2000
+                onConfirm(number)
+            }) {
+                Text("Zapisz")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Anuluj")
+            }
+        }
+    )
+}
+
+// Funkcja powiadomień zostaje bez zmian, ale musi tu być, żeby kod się kompilował
 fun scheduleNotification(context: Context) {
-    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    val intent = Intent(context, ReminderReceiver::class.java)
-    val pendingIntent = PendingIntent.getBroadcast(
-        context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+    // Tę funkcję powinieneś już mieć w tym pliku na samym dole - zostaw ją tak jak była,
+    // albo wklej z poprzednich kroków, jeśli ją usunąłeś.
+    // Dla porządku przypominam, że ona tu jest potrzebna :)
+    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+    val intent = android.content.Intent(context, ReminderReceiver::class.java)
+    val pendingIntent = android.app.PendingIntent.getBroadcast(
+        context, 0, intent, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
     )
     val triggerTime = System.currentTimeMillis() + 10_000
     try {
-        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-        Toast.makeText(context, "Przypomnienie ustawione!", Toast.LENGTH_SHORT).show()
+        alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+        android.widget.Toast.makeText(context, "Przypomnienie ustawione!", android.widget.Toast.LENGTH_SHORT).show()
     } catch (e: SecurityException) {
-        Toast.makeText(context, "Brak uprawnień!", Toast.LENGTH_SHORT).show()
+        android.widget.Toast.makeText(context, "Brak uprawnień!", android.widget.Toast.LENGTH_SHORT).show()
     }
 }
