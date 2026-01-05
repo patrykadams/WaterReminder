@@ -21,8 +21,19 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
     var dailyGoal by mutableIntStateOf(prefs.getInt("daily_goal", 2000))
         private set
 
-    // NOWOŚĆ: Częstotliwość powiadomień w minutach (domyślnie 60 min)
     var alertInterval by mutableIntStateOf(prefs.getInt("alert_interval", 60))
+        private set
+
+    var userWeight by mutableIntStateOf(prefs.getInt("user_weight", 70))
+        private set
+
+    var quickAddAmount by mutableIntStateOf(prefs.getInt("quick_add_amount", 250))
+        private set
+
+    // NOWOŚĆ: Godziny ciszy
+    var wakeUpHour by mutableIntStateOf(prefs.getInt("wake_up_hour", 8)) // Domyślnie 8:00
+        private set
+    var sleepHour by mutableIntStateOf(prefs.getInt("sleep_hour", 22))   // Domyślnie 22:00
         private set
 
     var records by mutableStateOf(listOf<WaterEntity>())
@@ -35,7 +46,7 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
         refreshData()
     }
 
-    private fun refreshData() {
+    fun refreshData() {
         viewModelScope.launch {
             val entry = dao.getTodayWater(todayDate)
             waterIntake = entry?.amount ?: 0
@@ -53,15 +64,23 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
         saveToDatabase()
     }
 
-    fun changeGoal(newGoal: Int) {
+    // Aktualizacja: Zapisujemy teraz też godziny snu
+    fun saveSettings(newGoal: Int, newInterval: Int, newWeight: Int, newQuickAdd: Int, newWakeUp: Int, newSleep: Int) {
         dailyGoal = newGoal
-        prefs.edit().putInt("daily_goal", newGoal).apply()
-    }
-
-    // NOWOŚĆ: Funkcja do zmiany częstotliwości
-    fun changeInterval(newInterval: Int) {
         alertInterval = newInterval
-        prefs.edit().putInt("alert_interval", newInterval).apply()
+        userWeight = newWeight
+        quickAddAmount = newQuickAdd
+        wakeUpHour = newWakeUp
+        sleepHour = newSleep
+
+        prefs.edit()
+            .putInt("daily_goal", newGoal)
+            .putInt("alert_interval", newInterval)
+            .putInt("user_weight", newWeight)
+            .putInt("quick_add_amount", newQuickAdd)
+            .putInt("wake_up_hour", newWakeUp)
+            .putInt("sleep_hour", newSleep)
+            .apply()
     }
 
     private fun saveToDatabase() {

@@ -30,7 +30,7 @@
             </intent-filter>
         </activity>
         <receiver android:name=".ReminderReceiver" />
-
+        <receiver android:name=".AddWaterReceiver" />
     </application>
 
 </manifest>
