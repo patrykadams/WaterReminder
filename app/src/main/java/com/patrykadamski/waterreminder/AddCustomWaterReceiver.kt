@@ -1,11 +1,10 @@
 package com.patrykadamski.waterreminder
 
-import android.app.NotificationManager
-import androidx.core.app.RemoteInput
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.core.app.RemoteInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -26,11 +25,7 @@ class AddCustomWaterReceiver : BroadcastReceiver() {
             }
         }
 
-        // CZYŚCIMY ŚCIANĘ WSTYDU
-        val prefs = context.getSharedPreferences("water_prefs", Context.MODE_PRIVATE) // Trzeba pobrać prefs
-        prefs.edit().putInt("missed_reminders_count", 0).apply()
-
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
         notificationManager.cancelAll()
     }
 
@@ -47,8 +42,11 @@ class AddCustomWaterReceiver : BroadcastReceiver() {
             dao.insert(entity)
 
             CoroutineScope(Dispatchers.Main).launch {
-                Toast.makeText(context, "Dodano niestandardowe $amount ml! 💧", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Dodano $amount ml! 💧", Toast.LENGTH_SHORT).show()
             }
+
+            // Resetujemy zegar (Inteligentny Interwał)
+            AlarmScheduler.scheduleNextAlarm(context)
         }
     }
 }

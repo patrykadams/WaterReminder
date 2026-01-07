@@ -1,5 +1,6 @@
 package com.patrykadamski.waterreminder
 
+// --- TE IMPORTY SĄ KLUCZOWE ---
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -8,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+// ------------------------------
 
 class AddWaterReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -27,14 +29,14 @@ class AddWaterReceiver : BroadcastReceiver() {
 
             CoroutineScope(Dispatchers.Main).launch {
                 Toast.makeText(context, "Dodano $amountToAdd ml! 💧", Toast.LENGTH_SHORT).show()
-                prefs.edit().putInt("missed_reminders_count", 0).apply()
-
-
             }
-        }
 
-        // CZYŚCIMY ŚCIANĘ WSTYDU
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-        notificationManager.cancelAll()
+            // Czyścimy powiadomienia
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            notificationManager.cancelAll()
+
+            // Resetujemy zegar powiadomień
+            AlarmScheduler.scheduleNextAlarm(context)
+        }
     }
 }

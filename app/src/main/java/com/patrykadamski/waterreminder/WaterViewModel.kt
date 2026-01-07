@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.util.Calendar
 
 class WaterViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -27,6 +28,10 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     var userGender by mutableStateOf(prefs.getString("user_gender", "M") ?: "M")
+        private set
+
+    // NOWOŚĆ: Poziom aktywności (NONE, LOW, MEDIUM, HIGH)
+    var userActivity by mutableStateOf(prefs.getString("user_activity", "NONE") ?: "NONE")
         private set
 
     var alertInterval by mutableIntStateOf(prefs.getInt("alert_interval", 60))
@@ -52,6 +57,9 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
     var showConfetti by mutableStateOf(false)
         private set
 
+    var nextAlarmTime by mutableStateOf("")
+        private set
+
     private val _toastMessage = MutableSharedFlow<String>()
     val toastMessage = _toastMessage.asSharedFlow()
 
@@ -71,6 +79,7 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
                 if (isFirstLoad) {
                     waterIntake = newAmount
                     isFirstLoad = false
+                    updateNextAlarmDisplay()
                     return@collectLatest
                 }
 
@@ -91,6 +100,9 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 waterIntake = newAmount
                 recalculateStreak()
+
+                delay(500)
+                updateNextAlarmDisplay()
             }
         }
 
@@ -112,6 +124,9 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
             val currentAmount = waterIntake
             val entity = WaterEntity(date = todayDate, amount = currentAmount + amount)
             dao.insert(entity)
+            AlarmScheduler.scheduleNextAlarm(getApplication())
+            delay(100)
+            updateNextAlarmDisplay()
         }
     }
 
@@ -125,6 +140,10 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
                 _toastMessage.emit("Cofnięto dodanie $amountToSubtract ml ↩️")
                 lastAddedAmount = 0
                 lastDrinkTime = 0L
+
+                AlarmScheduler.scheduleNextAlarm(getApplication())
+                delay(100)
+                updateNextAlarmDisplay()
             }
         }
     }
@@ -135,6 +154,23 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
             dao.insert(entity)
             lastDrinkTime = 0L
             lastAddedAmount = 0
+
+            AlarmScheduler.scheduleNextAlarm(getApplication())
+            delay(100)
+            updateNextAlarmDisplay()
+        }
+    }
+
+    fun updateNextAlarmDisplay() {
+        val nextTime = prefs.getLong("next_alarm_time", 0L)
+        if (nextTime > System.currentTimeMillis()) {
+            val calendar = Calendar.getInstance()
+            calendar.timeInMillis = nextTime
+            val hour = calendar.get(Calendar.HOUR_OF_DAY)
+            val minute = calendar.get(Calendar.MINUTE)
+            nextAlarmTime = String.format("%02d:%02d", hour, minute)
+        } else {
+            nextAlarmTime = ""
         }
     }
 
@@ -158,44 +194,45 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- ZMIANA: Automatyczne obliczanie interwału ---
-    // Usunęliśmy argument "newInterval", bo teraz liczymy go sami
-    fun saveSettings(newGoal: Int, newWeight: Int, newQuickAdd: Int, newWakeUp: Int, newSleep: Int, newGender: String) {
+    // --- ZAKTUALIZOWANA FUNKCJA: Zapisuje też Activity ---
+    fun saveSettings(newGoal: Int, newWeight: Int, newQuickAdd: Int, newWakeUp: Int, newSleep: Int, newGender: String, newActivity: String) {
         dailyGoal = newGoal
         userWeight = newWeight
         quickAddAmount = newQuickAdd
         wakeUpHour = newWakeUp
         sleepHour = newSleep
         userGender = newGender
+        userActivity = newActivity // Zapiszemy to
 
-        // 1. Obliczamy czas aktywności w minutach
+        // Obliczamy interwał startowy (dla UI, bo prawdziwy liczy Scheduler)
         var activeHours = newSleep - newWakeUp
-        if (activeHours < 0) activeHours += 24 // Obsługa przypadku gdy ktoś idzie spać po północy (np. wstaje 10, spać 2)
+        if (activeHours < 0) activeHours += 24
         val activeMinutes = activeHours * 60
-
-        // 2. Obliczamy ile porcji trzeba wypić
-        // (np. Cel 2000 / Porcja 250 = 8 porcji)
         val portionsNeeded = if (newQuickAdd > 0) newGoal.toFloat() / newQuickAdd.toFloat() else 1f
-
-        // 3. Obliczamy interwał (Czas / Porcje)
-        // Np. 960 minut / 8 porcji = 120 minut (co 2h)
-        // Zabezpieczamy się przed zerem i ustawiamy minimum 30 min, żeby nie spamować
         val calculatedInterval = (activeMinutes / portionsNeeded).toInt().coerceAtLeast(30)
 
         alertInterval = calculatedInterval
 
         prefs.edit()
             .putInt("daily_goal", newGoal)
-            .putInt("alert_interval", calculatedInterval) // Zapisujemy wyliczony czas
+            .putInt("alert_interval", calculatedInterval)
             .putInt("user_weight", newWeight)
             .putInt("quick_add_amount", newQuickAdd)
             .putInt("wake_up_hour", newWakeUp)
             .putInt("sleep_hour", newSleep)
             .putString("user_gender", newGender)
+            .putString("user_activity", newActivity) // Zapisujemy aktywność
             .apply()
 
+        AlarmScheduler.scheduleNextAlarm(getApplication())
+        viewModelScope.launch {
+            delay(200)
+            updateNextAlarmDisplay()
+        }
         recalculateStreak()
     }
 
-    fun refreshData() { }
+    fun refreshData() {
+        updateNextAlarmDisplay()
+    }
 }
