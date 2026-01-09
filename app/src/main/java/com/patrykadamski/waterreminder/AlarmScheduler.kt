@@ -13,10 +13,12 @@ import java.util.Calendar
 
 object AlarmScheduler {
 
+    // --- NOWOŚĆ: Sztywny bezpiecznik - minimum 15 minut przerwy ---
+    private const val MIN_COOLDOWN_MINUTES = 15
+
     fun scheduleNextAlarm(context: Context) {
         val prefs = context.getSharedPreferences("water_prefs", Context.MODE_PRIVATE)
         val dailyGoal = prefs.getInt("daily_goal", 2000)
-
         val dao = WaterDatabase.getDatabase(context).waterDao()
         val todayDate = LocalDate.now().toString()
 
@@ -25,18 +27,10 @@ object AlarmScheduler {
             val currentAmount = entry?.amount ?: 0
 
             if (currentAmount >= dailyGoal) {
-                // Cel zrealizowany - ANULUJEMY alarmy na dziś
                 cancelAlarm(context)
-                showToast(context, "Cel osiągnięty! Alarmy wyłączone na dziś 🌙")
             } else {
-                // Cel nie zrealizowany - OBLICZAMY DYNAMICZNY INTERWAŁ
                 val dynamicInterval = calculateDynamicInterval(prefs, currentAmount, dailyGoal)
-
-                // Ustawiamy alarm
                 setAlarm(context, prefs, dynamicInterval)
-
-                // Opcjonalnie: Toast dla pewności (możesz usunąć jeśli irytuje)
-                showToast(context, "Następne przypomnienie za $dynamicInterval min ⏳")
             }
         }
     }
@@ -45,29 +39,42 @@ object AlarmScheduler {
         val quickAddAmount = prefs.getInt("quick_add_amount", 250)
         val sleepHour = prefs.getInt("sleep_hour", 22)
 
-        val remainingWater = dailyGoal - currentAmount
-        if (remainingWater <= 0) return 0
+        // Pobierz czas ostatniego powiadomienia (zapisywany w ReminderReceiver)
+        val lastNotifTime = prefs.getLong("last_notification_time", 0L)
+        val currentTime = System.currentTimeMillis()
 
+        val remainingWater = dailyGoal - currentAmount
         val portionsLeft = remainingWater.toDouble() / quickAddAmount.toDouble()
-        if (portionsLeft <= 0) return 30
 
         val calendar = Calendar.getInstance()
-        val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
-        val currentMinute = calendar.get(Calendar.MINUTE)
-
-        val nowInMinutes = currentHour * 60 + currentMinute
+        val nowInMinutes = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE)
         var sleepInMinutes = sleepHour * 60
-
-        if (sleepHour < 5) {
-            sleepInMinutes += 24 * 60
-        }
+        if (sleepHour < 5) sleepInMinutes += 24 * 60
 
         val minutesLeftToday = sleepInMinutes - nowInMinutes
 
-        if (minutesLeftToday <= 0) return 0
+        // 1. Blokada wieczorna (60 min przed snem)
+        if (minutesLeftToday < 60) return 0
 
+        // 2. Jeśli została tylko jedna porcja
+        if (portionsLeft <= 1.1) return 90.coerceAtMost(minutesLeftToday)
+
+        // 3. Obliczenie interwału
         var calculatedInterval = (minutesLeftToday / portionsLeft).toInt()
-        return calculatedInterval.coerceIn(30, 180)
+
+        // --- NOWOŚĆ: Zapewnienie bezpiecznika czasowego ---
+        val minutesSinceLastNotif = ((currentTime - lastNotifTime) / 60000).toInt()
+
+        // Jeśli od ostatniego powiadomienia minęło np. 5 minut,
+        // a interwał ma być 45, to musimy przesunąć alarm tak,
+        // aby nastąpił najwcześniej 15 min (MIN_COOLDOWN) po poprzednim.
+        if (minutesSinceLastNotif < MIN_COOLDOWN_MINUTES) {
+            val waitTime = MIN_COOLDOWN_MINUTES - minutesSinceLastNotif
+            calculatedInterval = calculatedInterval.coerceAtLeast(waitTime)
+        }
+
+        // 4. Sztywne granice (min 45 min dla standardu, max 180 min)
+        return calculatedInterval.coerceIn(45, 180)
     }
 
     private fun setAlarm(context: Context, prefs: android.content.SharedPreferences, intervalMinutes: Int) {
@@ -82,61 +89,32 @@ object AlarmScheduler {
 
         val calendar = Calendar.getInstance()
         val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
-
-        val plannedCalendar = Calendar.getInstance()
-        plannedCalendar.add(Calendar.MINUTE, intervalMinutes)
-        val plannedHour = plannedCalendar.get(Calendar.HOUR_OF_DAY)
-
-        val isNightNow = (currentHour >= sleepHour || currentHour < wakeUpHour)
-        val willBeNight = (plannedHour >= sleepHour || plannedHour < wakeUpHour)
-
         var triggerAtMillis: Long = 0
 
-        if (isNightNow || willBeNight || intervalMinutes == 0) {
-            // Przekładamy na rano
+        if (intervalMinutes == 0 || currentHour >= sleepHour || currentHour < wakeUpHour) {
             val nextAlarm = Calendar.getInstance()
-            if (currentHour >= sleepHour) {
-                nextAlarm.add(Calendar.DAY_OF_YEAR, 1)
-            }
+            if (currentHour >= sleepHour) nextAlarm.add(Calendar.DAY_OF_YEAR, 1)
             nextAlarm.set(Calendar.HOUR_OF_DAY, wakeUpHour)
             nextAlarm.set(Calendar.MINUTE, 0)
             nextAlarm.set(Calendar.SECOND, 0)
-
             triggerAtMillis = nextAlarm.timeInMillis
         } else {
-            // Ustawiamy normalny alarm
             calendar.add(Calendar.MINUTE, intervalMinutes)
             triggerAtMillis = calendar.timeInMillis
         }
 
-        // --- ZAPISUJEMY CZAS DO PAMIĘCI (dla UI) ---
         prefs.edit().putLong("next_alarm_time", triggerAtMillis).apply()
 
         try {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                triggerAtMillis,
-                pendingIntent
-            )
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
         } catch (e: SecurityException) { e.printStackTrace() }
     }
 
     private fun cancelAlarm(context: Context) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val intent = Intent(context, ReminderReceiver::class.java)
-        val pendingIntent = PendingIntent.getBroadcast(
-            context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+        val pendingIntent = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         alarmManager.cancel(pendingIntent)
-
-        // Usuwamy zapisany czas, bo alarmu już nie ma
-        val prefs = context.getSharedPreferences("water_prefs", Context.MODE_PRIVATE)
-        prefs.edit().remove("next_alarm_time").apply()
-    }
-
-    private fun showToast(context: Context, message: String) {
-        CoroutineScope(Dispatchers.Main).launch {
-            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-        }
+        context.getSharedPreferences("water_prefs", Context.MODE_PRIVATE).edit().remove("next_alarm_time").apply()
     }
 }
