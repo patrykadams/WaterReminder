@@ -5,25 +5,29 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-// Tu mówimy: Ta baza korzysta z tabeli "WaterEntity"
-@Database(entities = [WaterEntity::class], version = 1)
+/**
+ * The main database holder.
+ * Implements the Singleton pattern to prevent multiple instances of the database opening at the same time.
+ */
+@Database(entities = [WaterEntity::class], version = 1, exportSchema = false)
 abstract class WaterDatabase : RoomDatabase() {
 
-    // Baza musi wiedzieć, jakiego ma "Kelnera"
     abstract fun waterDao(): WaterDao
 
-    // To poniżej to tzw. Singleton.
-    // Chodzi o to, żeby nie otwierać 100 połączeń do bazy naraz, tylko zawsze używać jednego.
     companion object {
         @Volatile
         private var INSTANCE: WaterDatabase? = null
 
+        /**
+         * Returns the singleton instance of WaterDatabase.
+         * Creates the database if it does not exist.
+         */
         fun getDatabase(context: Context): WaterDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     WaterDatabase::class.java,
-                    "water_database" // Nazwa pliku w telefonie
+                    "water_database"
                 ).build()
                 INSTANCE = instance
                 instance

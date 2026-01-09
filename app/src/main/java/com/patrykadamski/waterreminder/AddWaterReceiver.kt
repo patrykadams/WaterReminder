@@ -1,6 +1,5 @@
 package com.patrykadamski.waterreminder
 
-// --- TE IMPORTY SĄ KLUCZOWE ---
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -9,8 +8,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-// ------------------------------
 
+/**
+ * Handles the "Quick Add" action from the notification.
+ * Adds the default amount of water to the database and resets the alarm.
+ */
 class AddWaterReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val prefs = context.getSharedPreferences("water_prefs", Context.MODE_PRIVATE)
@@ -31,11 +33,11 @@ class AddWaterReceiver : BroadcastReceiver() {
                 Toast.makeText(context, "Dodano $amountToAdd ml! 💧", Toast.LENGTH_SHORT).show()
             }
 
-            // Czyścimy powiadomienia
+            // Clear notifications
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             notificationManager.cancelAll()
 
-            // Resetujemy zegar powiadomień
+            // Recalculate and schedule the next alarm immediately
             AlarmScheduler.scheduleNextAlarm(context)
         }
     }

@@ -41,7 +41,7 @@ import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.random.Random
 
-// Kolory
+// --- UI Colors & Constants ---
 val LightBlueBg = Color(0xFFE3F2FD)
 val WaterColor = Color(0xFF2196F3)
 val WaterGradientTop = Color(0xFF4FC3F7)
@@ -49,47 +49,53 @@ val WaterGradientBottom = Color(0xFF0288D1)
 val DropletBorderColor = Color(0xFF01579B)
 val EmptyDropletBg = Color(0xFFE1F5FE).copy(alpha = 0.5f)
 
+/**
+ * Main Composable screen for the Water Reminder application.
+ * Handles state observation, UI rendering, and dialog management.
+ */
 @Composable
 fun WaterReminderScreen(viewModel: WaterViewModel) {
     val context = LocalContext.current
+
+    // Toast handler
     LaunchedEffect(Unit) {
         viewModel.toastMessage.collect { message ->
             android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
+    // Refresh alarm time on resume
     LaunchedEffect(Unit) {
         viewModel.refreshData()
     }
 
+    // --- State Extraction ---
     val waterIntake = viewModel.waterIntake
     val dailyGoal = viewModel.dailyGoal
     val historyRecords = viewModel.records
-    val currentInterval = viewModel.alertInterval
-    val currentWeight = viewModel.userWeight
     val currentQuickAdd = viewModel.quickAddAmount
-    val currentWakeUp = viewModel.wakeUpHour
-    val currentSleep = viewModel.sleepHour
+    val currentWakeUpTotal = viewModel.wakeUpTotalMinutes
+    val currentSleepTotal = viewModel.sleepTotalMinutes
     val currentGender = viewModel.userGender
-    // Pobieramy aktywność
     val currentActivity = viewModel.userActivity
+    val currentWeight = viewModel.userWeight
 
     val streakDays = viewModel.streakDays
     val showConfetti = viewModel.showConfetti
     val lastAddedAmount = viewModel.lastAddedAmount
-
     val nextAlarmTime = viewModel.nextAlarmTime
 
+    // Dialog Visibility States
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showResetConfirmDialog by remember { mutableStateOf(false) }
     var showCustomWaterDialog by remember { mutableStateOf(false) }
 
+    // Animations & Messages
     val progress = (waterIntake.toFloat() / dailyGoal.toFloat()).coerceIn(0f, 1f)
     val animatedProgress by animateFloatAsState(targetValue = progress, animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing), label = "progress")
-
     val drankText = if (currentGender == "K") "Wypiłaś" else "Wypiłeś"
-
     var successMessage by remember { mutableStateOf("") }
+
     LaunchedEffect(waterIntake, dailyGoal, currentGender) {
         if (waterIntake >= dailyGoal) {
             if (currentGender == "K") {
@@ -102,12 +108,15 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
         }
     }
 
+    // --- Main UI Layout ---
     Box(modifier = Modifier.fillMaxSize().background(LightBlueBg)) {
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(10.dp))
+
+            // Header: Streak & Settings
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(text = "🔥", fontSize = 24.sp)
@@ -134,6 +143,7 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
+            // Central Water Droplet
             Box(contentAlignment = Alignment.Center, modifier = Modifier.size(220.dp)) {
                 WaterDropletProgressBar(progress = animatedProgress, modifier = Modifier.fillMaxSize())
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -144,6 +154,7 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Next Alarm Info Card
             if (nextAlarmTime.isNotEmpty() && waterIntake < dailyGoal) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.7f)),
@@ -169,11 +180,14 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
 
             Spacer(modifier = Modifier.weight(1f))
 
+            // Action Buttons
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Button(onClick = { viewModel.addWater(currentQuickAdd) }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = WaterColor)) { Text("+$currentQuickAdd ml") }
                 OutlinedButton(onClick = { showCustomWaterDialog = true }, modifier = Modifier.weight(1f)) { Text("Inna...") }
             }
             Spacer(modifier = Modifier.height(16.dp))
+
+            // Footer Controls
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { showResetConfirmDialog = true }) { Text("Reset", color = Color.Red.copy(alpha = 0.7f)) }
                 if (lastAddedAmount > 0) {
@@ -185,9 +199,12 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
                 }
                 TextButton(onClick = { scheduleNotification(context) }) { Text("Test") }
             }
+
             Spacer(modifier = Modifier.height(15.dp))
             Divider()
             Spacer(modifier = Modifier.height(10.dp))
+
+            // Stats Chart
             Text("Statystyki (7 dni):", style = MaterialTheme.typography.titleSmall, modifier = Modifier.align(Alignment.Start))
             Spacer(modifier = Modifier.height(15.dp))
             WeekBarChart(data = historyRecords.asReversed())
@@ -195,6 +212,7 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
         if (showConfetti) ConfettiAnimation()
     }
 
+    // --- Dialogs ---
     if (showResetConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showResetConfirmDialog = false },
@@ -211,13 +229,14 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
             currentGoal = dailyGoal,
             currentWeight = currentWeight,
             currentQuickAdd = currentQuickAdd,
-            currentWakeUp = currentWakeUp,
-            currentSleep = currentSleep,
+            currentWakeUpTotal = currentWakeUpTotal,
+            currentSleepTotal = currentSleepTotal,
             currentGender = currentGender,
-            currentActivity = currentActivity, // Przekazujemy aktywność
+            currentActivity = currentActivity,
+            viewModel = viewModel,
             onDismiss = { showSettingsDialog = false },
-            onConfirm = { g, w, q, wake, sleep, gender, activity ->
-                viewModel.saveSettings(g, w, q, wake, sleep, gender, activity)
+            onConfirm = { g, w, q, wakeTotal, sleepTotal, gender, activity ->
+                viewModel.saveSettings(g, w, q, wakeTotal, sleepTotal, gender, activity)
                 showSettingsDialog = false
                 scheduleNotification(context)
             }
@@ -225,6 +244,9 @@ fun WaterReminderScreen(viewModel: WaterViewModel) {
     }
 }
 
+/**
+ * Custom Painter for the Water Droplet shape with fill animation.
+ */
 @Composable
 fun WaterDropletProgressBar(progress: Float, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
@@ -246,22 +268,31 @@ fun WaterDropletProgressBar(progress: Float, modifier: Modifier = Modifier) {
     }
 }
 
-// --- ZMODYFIKOWANY DIALOG USTAWIEŃ: Obsługa Aktywności ---
+/**
+ * Settings Dialog containing Gender, Activity, Weight, Goal, and Time Schedule (via TimePicker).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditGoalDialog(
     currentGoal: Int, currentWeight: Int, currentQuickAdd: Int,
-    currentWakeUp: Int, currentSleep: Int, currentGender: String, currentActivity: String,
+    currentWakeUpTotal: Int, currentSleepTotal: Int,
+    currentGender: String, currentActivity: String,
+    viewModel: WaterViewModel,
     onDismiss: () -> Unit, onConfirm: (Int, Int, Int, Int, Int, String, String) -> Unit
 ) {
     var goalText by remember { mutableStateOf(currentGoal.toString()) }
     var weightText by remember { mutableStateOf(currentWeight.toString()) }
     var quickAddText by remember { mutableStateOf(currentQuickAdd.toString()) }
-    var wakeUpText by remember { mutableStateOf(currentWakeUp.toString()) }
-    var sleepText by remember { mutableStateOf(currentSleep.toString()) }
+
+    var wakeUpTotal by remember { mutableIntStateOf(currentWakeUpTotal) }
+    var sleepTotal by remember { mutableIntStateOf(currentSleepTotal) }
+
     var selectedGender by remember { mutableStateOf(currentGender) }
     var selectedActivity by remember { mutableStateOf(currentActivity) }
 
-    // Funkcja obliczająca cel z uwzględnieniem aktywności
+    var showWakeUpPicker by remember { mutableStateOf(false) }
+    var showSleepPicker by remember { mutableStateOf(false) }
+
     fun calculateGoal(weight: Int, gender: String, activity: String): Int {
         val baseGoal = weight * (if (gender == "M") 35 else 31)
         val multiplier = when(activity) {
@@ -274,7 +305,6 @@ fun EditGoalDialog(
         return (baseGoal * multiplier).toInt()
     }
 
-    // Pomocnicza funkcja do aktualizacji tekstu celu
     fun refreshGoalText() {
         val w = weightText.toIntOrNull()
         if (w != null && w > 0) {
@@ -285,11 +315,7 @@ fun EditGoalDialog(
     AlertDialog(
         onDismissRequest = onDismiss, title = { Text("Ustawienia") },
         text = {
-            Column(modifier = Modifier
-                .padding(vertical = 8.dp)
-                .verticalScroll(rememberScrollState()) // Dodano scroll, bo dialog robi się długi
-            ) {
-                // --- PŁEĆ ---
+            Column(modifier = Modifier.padding(vertical = 8.dp).verticalScroll(rememberScrollState())) {
                 Text("Płeć:", style = MaterialTheme.typography.labelLarge)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected = selectedGender == "M", onClick = { selectedGender = "M"; refreshGoalText() })
@@ -301,7 +327,6 @@ fun EditGoalDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // --- AKTYWNOŚĆ FIZYCZNA ---
                 Text("Aktywność fizyczna:", style = MaterialTheme.typography.labelLarge)
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -324,7 +349,6 @@ fun EditGoalDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // --- WAGA I CEL ---
                 Row {
                     OutlinedTextField(
                         value = weightText,
@@ -342,24 +366,54 @@ fun EditGoalDialog(
                     OutlinedTextField(value = goalText, onValueChange = { goalText = it.filter { c -> c.isDigit() } }, label = { Text("Cel (ml)") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // --- CZAS SNU ---
-                Row {
-                    OutlinedTextField(value = wakeUpText, onValueChange = { wakeUpText = it.filter { c -> c.isDigit() } }, label = { Text("Start") }, placeholder = { Text("8") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    OutlinedTextField(value = sleepText, onValueChange = { sleepText = it.filter { c -> c.isDigit() } }, label = { Text("Koniec") }, placeholder = { Text("22") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
+                Text("Harmonogram powiadomień:", style = MaterialTheme.typography.labelLarge)
+
+                // Time Pickers Triggers
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(modifier = Modifier.weight(1f).clickable { showWakeUpPicker = true }) {
+                        Text("Start:", style = MaterialTheme.typography.labelSmall)
+                        Text(text = viewModel.formatTime(wakeUpTotal), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = WaterColor)
+                    }
+                    Column(modifier = Modifier.weight(1f).clickable { showSleepPicker = true }) {
+                        Text("Koniec:", style = MaterialTheme.typography.labelSmall)
+                        Text(text = viewModel.formatTime(sleepTotal), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = WaterColor)
+                    }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+
+                Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(value = quickAddText, onValueChange = { quickAddText = it.filter { c -> c.isDigit() } }, label = { Text("Porcja (Szklanka)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
             }
         },
-        confirmButton = { Button(onClick = { onConfirm(goalText.toIntOrNull() ?: 2000, weightText.toIntOrNull() ?: 70, quickAddText.toIntOrNull() ?: 250, wakeUpText.toIntOrNull() ?: 8, sleepText.toIntOrNull() ?: 22, selectedGender, selectedActivity) }, colors = ButtonDefaults.buttonColors(containerColor = WaterColor)) { Text("Zapisz") } },
+        confirmButton = {
+            Button(onClick = {
+                onConfirm(goalText.toIntOrNull() ?: 2000, weightText.toIntOrNull() ?: 70, quickAddText.toIntOrNull() ?: 250, wakeUpTotal, sleepTotal, selectedGender, selectedActivity)
+            }, colors = ButtonDefaults.buttonColors(containerColor = WaterColor)) { Text("Zapisz") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } }
+    )
+
+    if (showWakeUpPicker) {
+        TimePickerDial(initialTotalMinutes = wakeUpTotal, onConfirm = { m -> wakeUpTotal = m; showWakeUpPicker = false }, onDismiss = { showWakeUpPicker = false })
+    }
+    if (showSleepPicker) {
+        TimePickerDial(initialTotalMinutes = sleepTotal, onConfirm = { m -> sleepTotal = m; showSleepPicker = false }, onDismiss = { showSleepPicker = false })
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TimePickerDial(initialTotalMinutes: Int, onConfirm: (Int) -> Unit, onDismiss: () -> Unit) {
+    val state = rememberTimePickerState(initialHour = initialTotalMinutes / 60, initialMinute = initialTotalMinutes % 60, is24Hour = true)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = { onConfirm(state.hour * 60 + state.minute) }) { Text("OK") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Anuluj") } },
+        text = { Column(horizontalAlignment = Alignment.CenterHorizontally) { TimePicker(state = state) } }
     )
 }
 
-// ... CustomWaterDialog, WeekBarChart, ConfettiAnimation ... (bez zmian)
 @Composable
 fun CustomWaterDialog(onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
     var text by remember { mutableStateOf("") }

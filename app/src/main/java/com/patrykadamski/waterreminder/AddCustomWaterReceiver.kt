@@ -10,6 +10,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
+/**
+ * Handles the text input action from the notification.
+ * Parses the user input and adds the custom water amount to the database.
+ */
 class AddCustomWaterReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
 
@@ -25,6 +29,7 @@ class AddCustomWaterReceiver : BroadcastReceiver() {
             }
         }
 
+        // Close the notification shade
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
         notificationManager.cancelAll()
     }
@@ -45,7 +50,7 @@ class AddCustomWaterReceiver : BroadcastReceiver() {
                 Toast.makeText(context, "Dodano $amount ml! 💧", Toast.LENGTH_SHORT).show()
             }
 
-            // Resetujemy zegar (Inteligentny Interwał)
+            // Recalculate schedule
             AlarmScheduler.scheduleNextAlarm(context)
         }
     }
