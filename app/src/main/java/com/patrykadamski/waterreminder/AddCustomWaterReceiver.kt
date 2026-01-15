@@ -11,8 +11,10 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /**
- * Handles the text input action from the notification.
- * Parses the user input and adds the custom water amount to the database.
+ * Handles custom text input from the notification shade.
+ *
+ * Ensures database consistency by querying the existing record ID before
+ * saving the new total amount.
  */
 class AddCustomWaterReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -25,11 +27,10 @@ class AddCustomWaterReceiver : BroadcastReceiver() {
             if (amountToAdd != null && amountToAdd > 0) {
                 addToDatabase(context, amountToAdd)
             } else {
-                Toast.makeText(context, "Wpisz poprawną liczbę!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Please enter a valid number!", Toast.LENGTH_SHORT).show()
             }
         }
 
-        // Close the notification shade
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
         notificationManager.cancelAll()
     }
@@ -39,18 +40,21 @@ class AddCustomWaterReceiver : BroadcastReceiver() {
         val todayDate = LocalDate.now().toString()
 
         CoroutineScope(Dispatchers.IO).launch {
+            // 1. Retrieve existing ID
             val currentEntry = dao.getTodayWater(todayDate)
             val currentAmount = currentEntry?.amount ?: 0
+            val idToUse = currentEntry?.id ?: 0
+
             val newAmount = currentAmount + amount
 
-            val entity = WaterEntity(date = todayDate, amount = newAmount)
+            // 2. Save with ID to overwrite
+            val entity = WaterEntity(id = idToUse, date = todayDate, amount = newAmount)
             dao.insert(entity)
 
             CoroutineScope(Dispatchers.Main).launch {
-                Toast.makeText(context, "Dodano $amount ml! 💧", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Added $amount ml! 💧", Toast.LENGTH_SHORT).show()
             }
 
-            // Recalculate schedule
             AlarmScheduler.scheduleNextAlarm(context)
         }
     }

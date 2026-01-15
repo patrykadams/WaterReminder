@@ -10,18 +10,10 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.util.Calendar
 
-/**
- * Singleton object responsible for calculating dynamic intervals
- * and scheduling AlarmManager events.
- */
 object AlarmScheduler {
 
-    // Minimum time (in minutes) between notifications to prevent spam.
     private const val MIN_COOLDOWN_MINUTES = 15
 
-    /**
-     * Checks current progress and schedules (or cancels) the next alarm.
-     */
     fun scheduleNextAlarm(context: Context) {
         val prefs = context.getSharedPreferences("water_prefs", Context.MODE_PRIVATE)
         val dailyGoal = prefs.getInt("daily_goal", 2000)
@@ -42,13 +34,8 @@ object AlarmScheduler {
         }
     }
 
-    /**
-     * Calculates the optimal time interval for the next notification.
-     * Factors: Remaining water, remaining time in day, cooldowns, evening constraints.
-     */
     private fun calculateDynamicInterval(prefs: android.content.SharedPreferences, currentAmount: Int, dailyGoal: Int): Int {
         val quickAddAmount = prefs.getInt("quick_add_amount", 250)
-        // Retrieve sleep time in total minutes (e.g., 22:30 = 1350)
         val sleepTimeTotal = prefs.getInt("sleep_total", 22 * 60)
 
         val lastNotifTime = prefs.getLong("last_notification_time", 0L)
@@ -61,26 +48,31 @@ object AlarmScheduler {
         val nowInMinutes = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE)
 
         var sleepInMinutes = sleepTimeTotal
-        // Handle midnight crossover (e.g., sleep at 01:00 AM)
         if (sleepInMinutes <= nowInMinutes && sleepInMinutes < 300) {
             sleepInMinutes += 24 * 60
         } else if (sleepInMinutes < nowInMinutes) {
-            // Already past bedtime
-            return 0
+            return 0 // Już po spaniu
         }
 
         val minutesLeftToday = sleepInMinutes - nowInMinutes
 
-        // 1. Evening Block: Silence notifications 60 min before sleep
+        // Jeśli do spania zostało < 60 min, nie wysyłaj
         if (minutesLeftToday < 60) return 0
 
-        // 2. Last Glass Logic: Relaxed interval if only 1 portion remains
+        // --- FIX: LOGIKA PORANNA ---
+        // Jeśli użytkownik jeszcze nic nie wypił (0 ml), a obudził się później niż planował,
+        // nie chcemy, żeby algorytm dzielił cały dzień na porcje i dawał długi czas.
+        // Chcemy przypomnieć mu szybciej (np. za 90 min).
+        if (currentAmount == 0) {
+            return 90
+        }
+        // ---------------------------
+
         if (portionsLeft <= 1.1) return 90.coerceAtMost(minutesLeftToday)
 
-        // 3. Mathematical calculation: Time / Portions
         var calculatedInterval = (minutesLeftToday / portionsLeft).toInt()
 
-        // 4. Cooldown Safety: Ensure MIN_COOLDOWN_MINUTES passed since last notification
+        // Cooldown
         val minutesSinceLastNotif = ((currentTime - lastNotifTime) / 60000).toInt()
 
         if (minutesSinceLastNotif < MIN_COOLDOWN_MINUTES) {
@@ -88,7 +80,6 @@ object AlarmScheduler {
             calculatedInterval = calculatedInterval.coerceAtLeast(waitTime)
         }
 
-        // 5. Hard Limits: Min 45m (anti-spam), Max 180m (don't stay silent too long)
         return calculatedInterval.coerceIn(45, 180)
     }
 
@@ -112,10 +103,10 @@ object AlarmScheduler {
 
         var triggerAtMillis: Long = 0
 
-        // Schedule for tomorrow morning if it's night or interval is 0 (evening block)
         val isNight = (currentHour >= sleepHour && sleepHour > 4) || (currentHour < wakeUpHour)
 
         if (intervalMinutes == 0 || isNight) {
+            // Planowanie na jutro rano
             val nextAlarm = Calendar.getInstance()
             if (currentHour >= sleepHour && sleepHour > 4) {
                 nextAlarm.add(Calendar.DAY_OF_YEAR, 1)
@@ -125,17 +116,26 @@ object AlarmScheduler {
             nextAlarm.set(Calendar.SECOND, 0)
             triggerAtMillis = nextAlarm.timeInMillis
         } else {
+            // Planowanie za X minut
             calendar.add(Calendar.MINUTE, intervalMinutes)
             triggerAtMillis = calendar.timeInMillis
         }
 
-        // Save time for UI display
         prefs.edit().putLong("next_alarm_time", triggerAtMillis).apply()
 
         try {
-            // allowWhileIdle ensures alarm fires even in Doze mode
-            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-        } catch (e: SecurityException) { e.printStackTrace() }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                if (alarmManager.canScheduleExactAlarms()) {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+                } else {
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+                }
+            } else {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+            }
+        } catch (e: SecurityException) {
+            e.printStackTrace()
+        }
     }
 
     private fun cancelAlarm(context: Context) {

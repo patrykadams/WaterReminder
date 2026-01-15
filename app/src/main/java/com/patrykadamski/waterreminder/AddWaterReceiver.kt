@@ -10,8 +10,12 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /**
- * Handles the "Quick Add" action from the notification.
- * Adds the default amount of water to the database and resets the alarm.
+ * Handles the "Quick Add" action directly from the notification.
+ *
+ * Implements a check-then-update logic:
+ * 1. Queries the database for the existing entry for today.
+ * 2. Retrieves the ID of that entry.
+ * 3. Performs an update using that ID to prevent duplicate rows.
  */
 class AddWaterReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -22,22 +26,27 @@ class AddWaterReceiver : BroadcastReceiver() {
         val todayDate = LocalDate.now().toString()
 
         CoroutineScope(Dispatchers.IO).launch {
+            // 1. Fetch current entry to get the ID
             val currentEntry = dao.getTodayWater(todayDate)
+
             val currentAmount = currentEntry?.amount ?: 0
+            val idToUse = currentEntry?.id ?: 0 // Use 0 only if no entry exists (creates new)
+
             val newAmount = currentAmount + amountToAdd
 
-            val entity = WaterEntity(date = todayDate, amount = newAmount)
+            // 2. Insert with the correct ID (triggers REPLACE strategy in DAO)
+            val entity = WaterEntity(id = idToUse, date = todayDate, amount = newAmount)
             dao.insert(entity)
 
             CoroutineScope(Dispatchers.Main).launch {
-                Toast.makeText(context, "Dodano $amountToAdd ml! 💧", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Added $amountToAdd ml! 💧", Toast.LENGTH_SHORT).show()
             }
 
-            // Clear notifications
+            // Dismiss notifications
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             notificationManager.cancelAll()
 
-            // Recalculate and schedule the next alarm immediately
+            // Reschedule next alarm
             AlarmScheduler.scheduleNextAlarm(context)
         }
     }
