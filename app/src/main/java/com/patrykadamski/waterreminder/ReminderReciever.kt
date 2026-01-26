@@ -23,24 +23,27 @@ class ReminderReceiver : BroadcastReceiver() {
             val entry = dao.getTodayWater(todayDate)
             val currentAmount = entry?.amount ?: 0
 
-            // Jeśli cel osiągnięty, nie planujemy więcej
+            // If goal is already met for today, just silently reschedule to ensure tomorrow is safe
             if (currentAmount >= dailyGoal) {
                 AlarmScheduler.scheduleNextAlarm(context)
                 return@launch
             }
 
-            launchNotification(context, prefs)
+            launchNotification(context, prefs, currentAmount)
         }
     }
 
-    private fun launchNotification(context: Context, prefs: android.content.SharedPreferences) {
+    private fun launchNotification(context: Context, prefs: android.content.SharedPreferences, currentAmount: Int) {
         val quickAddAmount = prefs.getInt("quick_add_amount", 250)
         val gender = prefs.getString("user_gender", "M") ?: "M"
         val missedCount = prefs.getInt("missed_reminders_count", 0)
 
-        val (title, text) = getMotivationText(missedCount, gender)
+        // Pass currentAmount to determine text
+        val (title, text) = getMotivationText(missedCount, gender, currentAmount)
 
-        prefs.edit().putInt("missed_reminders_count", missedCount + 1).apply()
+        if (currentAmount > 0) {
+            prefs.edit().putInt("missed_reminders_count", missedCount + 1).apply()
+        }
 
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         if (!powerManager.isInteractive) {
@@ -77,17 +80,22 @@ class ReminderReceiver : BroadcastReceiver() {
 
         notificationManager.notify(notificationId, notification)
 
-        // Planujemy kolejny alarm (inteligentne przeplanowanie)
         AlarmScheduler.scheduleNextAlarm(context)
     }
 
-    private fun getMotivationText(missedCount: Int, gender: String): Pair<String, String> {
+    private fun getMotivationText(missedCount: Int, gender: String, currentAmount: Int): Pair<String, String> {
+        // --- MORNING LOGIC ---
+        if (currentAmount == 0) {
+            return "Dzień dobry! ☀️" to "Hej, Twój dzień się zaczął! Dodaj pierwszą wodę, kiedy będziesz gotowy 💧"
+        }
+
+        // Standard logic
         val isFemale = gender == "K"
         val facts = listOf("Głowa nie będzie boleć. 💆‍♀️", "Darmowa energia w 3.. 2.. 1.. ⚡", "Cera Ci podziękuje. ✨", "Nerki lubią to.")
         val randomFact = facts.random()
         return if (isFemale) {
             when {
-                missedCount == 0 -> listOf("Kocham Cię! ❤️" to "Wypij szklankę wody. Dbaj o siebie.", "Jesteś Super! 🌟" to "Szybki łyk i wracamy do bycia super.", "Puk puk! 🚪" to "To ja, Twoja woda. Wpuścisz mnie?", "Czas na przerwę 🥤" to randomFact, "Nawadnianie! 💧" to "Zrób to dla zdrowia (i dla mnie).").random()
+                missedCount == 0 -> listOf("Kocham Cię! ❤️" to "Wypij szklankę wody. Dbaj o siebie.", "Jesteś Super! 🌟" to "Szybki łyk i wracamy do bycia super.", "Puk puk! 🚪" to "To ja, Twoja woda. Wpuścisz mnie?", "Czas na przerwę 🥤" to randomFact, "Nawadnianie! 💧" to "Zrób to dla zdrowia.").random()
                 missedCount == 1 -> "Halo, tu Woda 🌊" to "Czuję się ignorowana... Napij się!"
                 else -> "Zamieniasz się w kaktusa 🌵" to "Serio, ile można czekać? Pij natychmiast!"
             }
