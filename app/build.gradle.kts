@@ -7,14 +7,14 @@ plugins {
 
 android {
     namespace = "com.patrykadamski.waterreminder"
-    compileSdk = 34 // Assuming recent SDK based on "release(36)" typo in source or preview usage
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.patrykadamski.waterreminder"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3  // Incremented for v1.2
+        versionName = "1.2" // Updated for v1.2
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
