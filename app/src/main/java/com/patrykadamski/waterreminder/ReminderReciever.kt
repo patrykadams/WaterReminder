@@ -12,6 +12,12 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 class ReminderReceiver : BroadcastReceiver() {
+
+    // FIXED: Constant ID to prevent notifications from stacking
+    companion object {
+        const val NOTIFICATION_ID = 777
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
         val prefs = context.getSharedPreferences("water_prefs", Context.MODE_PRIVATE)
         val dailyGoal = prefs.getInt("daily_goal", 2000)
@@ -23,7 +29,6 @@ class ReminderReceiver : BroadcastReceiver() {
             val entry = dao.getTodayWater(todayDate)
             val currentAmount = entry?.amount ?: 0
 
-            // If goal is already met for today, just silently reschedule to ensure tomorrow is safe
             if (currentAmount >= dailyGoal) {
                 AlarmScheduler.scheduleNextAlarm(context)
                 return@launch
@@ -38,7 +43,6 @@ class ReminderReceiver : BroadcastReceiver() {
         val gender = prefs.getString("user_gender", "M") ?: "M"
         val missedCount = prefs.getInt("missed_reminders_count", 0)
 
-        // Pass currentAmount to determine text
         val (title, text) = getMotivationText(missedCount, gender, currentAmount)
 
         if (currentAmount > 0) {
@@ -51,16 +55,17 @@ class ReminderReceiver : BroadcastReceiver() {
             wakeLock.acquire(3000)
         }
 
-        val notificationId = System.currentTimeMillis().toInt()
+        // Intents
         val openAppIntent = Intent(context, MainActivity::class.java)
-        val pendingIntent = android.app.PendingIntent.getActivity(context, notificationId, openAppIntent, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+        val pendingIntent = android.app.PendingIntent.getActivity(context, NOTIFICATION_ID, openAppIntent, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
 
         val addWaterIntent = Intent(context, AddWaterReceiver::class.java)
-        val addWaterPendingIntent = android.app.PendingIntent.getBroadcast(context, notificationId, addWaterIntent, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+        val addWaterPendingIntent = android.app.PendingIntent.getBroadcast(context, NOTIFICATION_ID, addWaterIntent, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
 
         val remoteInput = RemoteInput.Builder("key_custom_amount").setLabel("Ile wypiłeś?").build()
         val customWaterIntent = Intent(context, AddCustomWaterReceiver::class.java)
-        val customWaterPendingIntent = android.app.PendingIntent.getBroadcast(context, notificationId, customWaterIntent, android.app.PendingIntent.FLAG_MUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+        val customWaterPendingIntent = android.app.PendingIntent.getBroadcast(context, NOTIFICATION_ID, customWaterIntent, android.app.PendingIntent.FLAG_MUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+
         val customAction = NotificationCompat.Action.Builder(android.R.drawable.ic_menu_edit, "Inna ilość", customWaterPendingIntent).addRemoteInput(remoteInput).build()
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
@@ -75,27 +80,26 @@ class ReminderReceiver : BroadcastReceiver() {
             .setAutoCancel(true)
             .addAction(android.R.drawable.ic_input_add, "+$quickAddAmount ml", addWaterPendingIntent)
             .addAction(customAction)
-            .setGroup("WATER_REMINDER_GROUP")
+            .setGroup("WATER_REMINDER_GROUP") // Optional now, since we overwrite
             .build()
 
-        notificationManager.notify(notificationId, notification)
+        // FIXED: Use the constant ID
+        notificationManager.notify(NOTIFICATION_ID, notification)
 
         AlarmScheduler.scheduleNextAlarm(context)
     }
 
     private fun getMotivationText(missedCount: Int, gender: String, currentAmount: Int): Pair<String, String> {
-        // --- MORNING LOGIC ---
         if (currentAmount == 0) {
             return "Dzień dobry! ☀️" to "Hej, Twój dzień się zaczął! Dodaj pierwszą wodę, kiedy będziesz gotowy 💧"
         }
 
-        // Standard logic
         val isFemale = gender == "K"
         val facts = listOf("Głowa nie będzie boleć. 💆‍♀️", "Darmowa energia w 3.. 2.. 1.. ⚡", "Cera Ci podziękuje. ✨", "Nerki lubią to.")
         val randomFact = facts.random()
         return if (isFemale) {
             when {
-                missedCount == 0 -> listOf("Kocham Cię! ❤️" to "Wypij szklankę wody. Dbaj o siebie.", "Jesteś Super! 🌟" to "Szybki łyk i wracamy do bycia super.", "Puk puk! 🚪" to "To ja, Twoja woda. Wpuścisz mnie?", "Czas na przerwę 🥤" to randomFact, "Nawadnianie! 💧" to "Zrób to dla zdrowia.").random()
+                missedCount == 0 -> listOf("Kocham Cię! ❤️" to "Wypij szklankę wody. Dbaj o siebie.", "Jesteś Super! 🌟" to "Szybki łyk i wracamy do bycia super.", "Puk puk! 🚪" to "To ja, Twoja woda. Wpuścisz mnie?", "Czas na przerwę 🥤" to randomFact, "Nawadnianie! 💧" to "Zrób to dla zdrowia (i dla mnie).").random()
                 missedCount == 1 -> "Halo, tu Woda 🌊" to "Czuję się ignorowana... Napij się!"
                 else -> "Zamieniasz się w kaktusa 🌵" to "Serio, ile można czekać? Pij natychmiast!"
             }
