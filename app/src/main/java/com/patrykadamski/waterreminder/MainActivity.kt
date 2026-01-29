@@ -1,39 +1,49 @@
 package com.patrykadamski.waterreminder
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.content.Context
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.patrykadamski.waterreminder.ui.theme.WaterReminderTheme
 
-
+/**
+ * The main entry point of the application.
+ * This activity initializes the ViewModel and sets up the Compose UI with Dynamic Theme.
+ */
 class MainActivity : ComponentActivity() {
+
+    // Initialize the ViewModel using the activityViewModels delegate
+    private val waterViewModel: WaterViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        createNotificationChannel()
+
+        // Ensure the app content can be drawn under the status bar if needed
+        // (Optional: WindowCompat.setDecorFitsSystemWindows(window, false))
+
         setContent {
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    // TU JEST ZMIANA: Tworzymy Managera (ViewModel)
-                    val viewModel: WaterViewModel = viewModel()
-                    WaterReminderScreen(viewModel)
+            // Apply the custom Material You theme we created
+            WaterReminderTheme {
+                // Surface provides the background color from the theme
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    // CRITICAL FIX: Calling 'WaterScreen' instead of 'WaterReminderScreen'
+                    // to match the definition in WaterScreen.kt
+                    WaterScreen(viewModel = waterViewModel)
                 }
             }
         }
     }
 
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel("water_reminder_channel", "Przypomnienie o wodzie", NotificationManager.IMPORTANCE_HIGH)
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
-        }
+    override fun onResume() {
+        super.onResume()
+        // Refresh data (like next alarm time) when user returns to app
+        waterViewModel.refreshData()
     }
 }
