@@ -69,7 +69,7 @@ class ReminderReceiver : BroadcastReceiver() {
         val customAction = NotificationCompat.Action.Builder(android.R.drawable.ic_menu_edit, "Inna ilość", customWaterPendingIntent).addRemoteInput(remoteInput).build()
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-        val notification = NotificationCompat.Builder(context, "water_reminder_channel")
+        val notification = NotificationCompat.Builder(context, WaterReminderApp.CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(text)

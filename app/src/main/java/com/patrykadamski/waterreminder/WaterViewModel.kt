@@ -48,6 +48,11 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
     var sleepHour by mutableIntStateOf(prefs.getInt("sleep_hour", 22))
         private set
 
+    var reminderFrequency by mutableStateOf(
+        prefs.getString("reminder_frequency", ReminderPacing.FREQUENCY_NORMAL) ?: ReminderPacing.FREQUENCY_NORMAL
+    )
+        private set
+
     var records by mutableStateOf(listOf<WaterEntity>())
         private set
 
@@ -58,6 +63,10 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     var nextAlarmTime by mutableStateOf("")
+        private set
+
+    // null = jeszcze nie ustalono; true/false = decyzja podjęta (patrz init)
+    var showOnboarding by mutableStateOf<Boolean?>(null)
         private set
 
     private val _toastMessage = MutableSharedFlow<String>()
@@ -110,6 +119,18 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
             dao.getLast7DaysFlow().collectLatest { list ->
                 records = list
             }
+        }
+
+        viewModelScope.launch {
+            val alreadyOnboarded = prefs.getBoolean("onboarding_completed", false)
+            // "daily_goal" already in prefs, or any past water history, both mean this is
+            // an existing user (e.g. updating the app) rather than a genuine first launch -
+            // never show onboarding to them or touch their goal automatically.
+            val hasPriorUsage = prefs.contains("daily_goal") || dao.getAllHistory().isNotEmpty()
+            if (!alreadyOnboarded && hasPriorUsage) {
+                prefs.edit().putBoolean("onboarding_completed", true).apply()
+            }
+            showOnboarding = !alreadyOnboarded && !hasPriorUsage
         }
     }
 
@@ -194,8 +215,17 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- ZAKTUALIZOWANA FUNKCJA: Zapisuje też Activity ---
-    fun saveSettings(newGoal: Int, newWeight: Int, newQuickAdd: Int, newWakeUp: Int, newSleep: Int, newGender: String, newActivity: String) {
+    // --- ZAKTUALIZOWANA FUNKCJA: Zapisuje też Activity i częstotliwość przypomnień ---
+    fun saveSettings(
+        newGoal: Int,
+        newWeight: Int,
+        newQuickAdd: Int,
+        newWakeUp: Int,
+        newSleep: Int,
+        newGender: String,
+        newActivity: String,
+        newFrequency: String = reminderFrequency
+    ) {
         dailyGoal = newGoal
         userWeight = newWeight
         quickAddAmount = newQuickAdd
@@ -203,13 +233,17 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
         sleepHour = newSleep
         userGender = newGender
         userActivity = newActivity // Zapiszemy to
+        reminderFrequency = newFrequency
 
-        // Obliczamy interwał startowy (dla UI, bo prawdziwy liczy Scheduler)
-        var activeHours = newSleep - newWakeUp
-        if (activeHours < 0) activeHours += 24
-        val activeMinutes = activeHours * 60
-        val portionsNeeded = if (newQuickAdd > 0) newGoal.toFloat() / newQuickAdd.toFloat() else 1f
-        val calculatedInterval = (activeMinutes / portionsNeeded).toInt().coerceAtLeast(30)
+        // Bazowy interwał liczony tą samą funkcją co realny harmonogram w AlarmScheduler,
+        // żeby podgląd w UI nigdy się z nim nie rozjechał.
+        val calculatedInterval = ReminderPacing.baseIntervalMinutes(
+            wakeUpHour = newWakeUp,
+            sleepHour = newSleep,
+            dailyGoal = newGoal,
+            quickAddAmount = newQuickAdd,
+            frequency = newFrequency
+        )
 
         alertInterval = calculatedInterval
 
@@ -222,6 +256,7 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
             .putInt("sleep_hour", newSleep)
             .putString("user_gender", newGender)
             .putString("user_activity", newActivity) // Zapisujemy aktywność
+            .putString("reminder_frequency", newFrequency)
             .apply()
 
         AlarmScheduler.scheduleNextAlarm(getApplication())
@@ -234,5 +269,19 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshData() {
         updateNextAlarmDisplay()
+    }
+
+    fun completeOnboarding(weightKg: Int, activityLevel: String, goal: Int) {
+        prefs.edit().putBoolean("onboarding_completed", true).apply()
+        saveSettings(
+            newGoal = goal,
+            newWeight = weightKg,
+            newQuickAdd = quickAddAmount,
+            newWakeUp = wakeUpHour,
+            newSleep = sleepHour,
+            newGender = userGender,
+            newActivity = activityLevel
+        )
+        showOnboarding = false
     }
 }

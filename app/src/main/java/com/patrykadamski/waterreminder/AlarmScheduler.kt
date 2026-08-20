@@ -4,6 +4,10 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import android.util.Log
 import android.widget.Toast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,6 +16,8 @@ import java.time.LocalDate
 import java.util.Calendar
 
 object AlarmScheduler {
+
+    private const val TAG = "AlarmScheduler"
 
     fun scheduleNextAlarm(context: Context) {
         val prefs = context.getSharedPreferences("water_prefs", Context.MODE_PRIVATE)
@@ -24,9 +30,34 @@ object AlarmScheduler {
             val entry = dao.getTodayWater(todayDate)
             val currentAmount = entry?.amount ?: 0
 
+            val quickAddAmount = prefs.getInt("quick_add_amount", 250)
+            val wakeUpHour = prefs.getInt("wake_up_hour", 8)
+            val sleepHour = prefs.getInt("sleep_hour", 22)
+            val frequency = prefs.getString("reminder_frequency", ReminderPacing.FREQUENCY_NORMAL)
+                ?: ReminderPacing.FREQUENCY_NORMAL
+
+            val baseInterval = ReminderPacing.baseIntervalMinutes(
+                wakeUpHour = wakeUpHour,
+                sleepHour = sleepHour,
+                dailyGoal = dailyGoal,
+                quickAddAmount = quickAddAmount,
+                frequency = frequency
+            )
+
+            val calendar = Calendar.getInstance()
+            val nowMinuteOfDay = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE)
+
             // CHANGE: We ALWAYS calculate an alarm.
-            // If goal is met, 'calculateDynamicInterval' returns 0, which we handle as "Schedule for Tomorrow".
-            val dynamicInterval = calculateDynamicInterval(prefs, currentAmount, dailyGoal)
+            // If goal is met, 'nextIntervalMinutes' returns 0, which we handle as "Schedule for Tomorrow".
+            val dynamicInterval = ReminderPacing.nextIntervalMinutes(
+                nowMinuteOfDay = nowMinuteOfDay,
+                wakeUpHour = wakeUpHour,
+                sleepHour = sleepHour,
+                dailyGoal = dailyGoal,
+                currentAmount = currentAmount,
+                quickAddAmount = quickAddAmount,
+                baseInterval = baseInterval
+            )
 
             setAlarm(context, prefs, dynamicInterval)
 
@@ -37,35 +68,6 @@ object AlarmScheduler {
                 showToast(context, "Następne przypomnienie za $dynamicInterval min ⏳")
             }
         }
-    }
-
-    private fun calculateDynamicInterval(prefs: android.content.SharedPreferences, currentAmount: Int, dailyGoal: Int): Int {
-        val quickAddAmount = prefs.getInt("quick_add_amount", 250)
-        val sleepHour = prefs.getInt("sleep_hour", 22)
-
-        val remainingWater = dailyGoal - currentAmount
-        if (remainingWater <= 0) return 0 // Signal to schedule for tomorrow
-
-        val portionsLeft = remainingWater.toDouble() / quickAddAmount.toDouble()
-        if (portionsLeft <= 0) return 30
-
-        val calendar = Calendar.getInstance()
-        val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
-        val currentMinute = calendar.get(Calendar.MINUTE)
-
-        val nowInMinutes = currentHour * 60 + currentMinute
-        var sleepInMinutes = sleepHour * 60
-
-        if (sleepHour < 5) {
-            sleepInMinutes += 24 * 60
-        }
-
-        val minutesLeftToday = sleepInMinutes - nowInMinutes
-
-        if (minutesLeftToday <= 0) return 0 // Signal to schedule for tomorrow
-
-        var calculatedInterval = (minutesLeftToday / portionsLeft).toInt()
-        return calculatedInterval.coerceIn(30, 180)
     }
 
     private fun setAlarm(context: Context, prefs: android.content.SharedPreferences, intervalMinutes: Int) {
@@ -118,13 +120,37 @@ object AlarmScheduler {
 
         prefs.edit().putLong("next_alarm_time", triggerAtMillis).apply()
 
-        try {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                triggerAtMillis,
-                pendingIntent
-            )
-        } catch (e: SecurityException) { e.printStackTrace() }
+        if (hasExactAlarmPermission(context)) {
+            try {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pendingIntent
+                )
+                return
+            } catch (e: SecurityException) {
+                Log.w(TAG, "Exact alarm permission revoked mid-flight, falling back to inexact alarm", e)
+            }
+        }
+
+        // No exact-alarm permission (or it was just revoked): fall back to an inexact
+        // alarm so reminders keep firing (roughly on time) instead of silently stopping.
+        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+    }
+
+    fun hasExactAlarmPermission(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        return alarmManager.canScheduleExactAlarms()
+    }
+
+    fun requestExactAlarmPermission(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+            data = Uri.parse("package:${context.packageName}")
+            if (context !is android.app.Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
     }
 
     // Removed cancelAlarm() as we never want to completely kill the cycle anymore.
