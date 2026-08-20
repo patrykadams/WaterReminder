@@ -42,8 +42,7 @@ class EveningSummaryReceiver : BroadcastReceiver() {
     }
 
     private fun showNotification(context: Context, todayAmount: Int, dailyGoal: Int, streak: Int) {
-        val dayWord = if (streak == 1) "dzień" else "dni"
-        val text = "Dziś: $todayAmount/$dailyGoal ml. Streak: $streak $dayWord."
+        val text = "Dziś: $todayAmount/$dailyGoal ml. Streak: $streak ${StreakCalculator.dayWord(streak)}."
 
         val openAppIntent = Intent(context, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(

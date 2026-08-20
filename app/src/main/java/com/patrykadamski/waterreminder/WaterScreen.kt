@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,117 +26,158 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun WaterScreen(viewModel: WaterViewModel) {
     var showSettingsDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     if (showSettingsDialog) {
         GoalSettingsDialog(viewModel = viewModel, onDismiss = { showSettingsDialog = false })
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Water Reminder", color = MaterialTheme.colorScheme.onBackground) },
-                actions = {
-                    IconButton(onClick = { showSettingsDialog = true }) {
-                        Icon(
-                            Icons.Default.Settings,
-                            contentDescription = "Ustawienia celu",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
+    // Surfaces ViewModel-side messages (cooldown warning, undo confirmation, ...)
+    // that previously had nowhere to render.
+    LaunchedEffect(viewModel) {
+        viewModel.toastMessage.collect { message ->
+            snackbarHostState.showSnackbar(message)
         }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(24.dp))
+    }
 
-            // Progress Visualization
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(200.dp)) {
-                val primaryColor = MaterialTheme.colorScheme.primary
-                val outlineColor = MaterialTheme.colorScheme.outlineVariant
-                val progress = (viewModel.waterIntake.toFloat() / viewModel.dailyGoal.toFloat()).coerceIn(0f, 1f)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = { Text("Water Reminder", color = MaterialTheme.colorScheme.onBackground) },
+                    actions = {
+                        IconButton(onClick = { showSettingsDialog = true }) {
+                            Icon(
+                                Icons.Default.Settings,
+                                contentDescription = "Ustawienia celu",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                )
+            }
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(24.dp))
 
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    // Draw droplet outline using Theme outline color
-                    drawCircle(color = outlineColor, style = androidx.compose.ui.graphics.drawscope.Stroke(4.dp.toPx()))
+                // Progress Visualization
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(200.dp)) {
+                    val primaryColor = MaterialTheme.colorScheme.primary
+                    val outlineColor = MaterialTheme.colorScheme.outlineVariant
+                    val progress = (viewModel.waterIntake.toFloat() / viewModel.dailyGoal.toFloat()).coerceIn(0f, 1f)
 
-                    // Fill droplet using Dynamic primary color
-                    clipRect(top = size.height * (1f - progress)) {
-                        drawCircle(color = primaryColor)
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        // Draw droplet outline using Theme outline color
+                        drawCircle(color = outlineColor, style = androidx.compose.ui.graphics.drawscope.Stroke(4.dp.toPx()))
+
+                        // Fill droplet using Dynamic primary color
+                        clipRect(top = size.height * (1f - progress)) {
+                            drawCircle(color = primaryColor)
+                        }
+                    }
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "${viewModel.waterIntake} ml",
+                            fontSize = 32.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Goal: ${viewModel.dailyGoal} ml",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
 
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "🔥 Streak: ${viewModel.streakDays} ${StreakCalculator.dayWord(viewModel.streakDays)}",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (viewModel.nextAlarmTime.isNotEmpty()) {
                     Text(
-                        text = "${viewModel.waterIntake} ml",
-                        fontSize = 32.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "Goal: ${viewModel.dailyGoal} ml",
+                        text = "⏰ Następne przypomnienie: ${viewModel.nextAlarmTime}",
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
 
-            Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-            // Quick-add buttons, one per user-defined vessel size, plus Reset.
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(horizontal = 24.dp)
-            ) {
-                viewModel.vesselSizes.forEach { size ->
-                    Button(
-                        onClick = { viewModel.addWater(size.amountMl) },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                // Quick-add buttons, one per user-defined vessel size, plus Reset.
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(horizontal = 24.dp)
+                ) {
+                    viewModel.vesselSizes.forEach { size ->
+                        Button(
+                            onClick = { viewModel.addWater(size.amountMl) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        ) {
+                            Text("${size.name} +${size.amountMl}ml")
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = { viewModel.resetWater() },
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                     ) {
-                        Text("${size.name} +${size.amountMl}ml")
+                        Text("Reset", color = MaterialTheme.colorScheme.primary)
+                    }
+
+                    if (viewModel.lastAddedAmount > 0) {
+                        OutlinedButton(
+                            onClick = { viewModel.undoLastAdd() },
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                        ) {
+                            Text("Cofnij ${viewModel.lastAddedAmount}ml", color = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
 
-                OutlinedButton(
-                    onClick = { viewModel.resetWater() },
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                ) {
-                    Text("Reset", color = MaterialTheme.colorScheme.primary)
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // History Header
+                Text(
+                    "Last 7 Days",
+                    modifier = Modifier.padding(16.dp),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                // History List using Theme colors
+                LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                    items(viewModel.records) { record ->
+                        ListItem(
+                            headlineContent = { Text(record.date, color = MaterialTheme.colorScheme.onSurface) },
+                            trailingContent = { Text("${record.amount} ml", color = MaterialTheme.colorScheme.primary) },
+                            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
+                        )
+                    }
                 }
             }
+        }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // History Header
-            Text(
-                "Last 7 Days",
-                modifier = Modifier.padding(16.dp),
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.titleMedium
-            )
-
-            // History List using Theme colors
-            LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                items(viewModel.records) { record ->
-                    ListItem(
-                        headlineContent = { Text(record.date, color = MaterialTheme.colorScheme.onSurface) },
-                        trailingContent = { Text("${record.amount} ml", color = MaterialTheme.colorScheme.primary) },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
-                    )
-                }
-            }
+        if (viewModel.showConfetti) {
+            ConfettiOverlay(modifier = Modifier.fillMaxSize())
         }
     }
 }

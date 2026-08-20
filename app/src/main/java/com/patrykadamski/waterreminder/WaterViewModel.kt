@@ -89,6 +89,7 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
                     waterIntake = newAmount
                     isFirstLoad = false
                     updateNextAlarmDisplay()
+                    recalculateStreak() // otherwise the streak shown on open is stale until the user acts
                     return@collectLatest
                 }
 

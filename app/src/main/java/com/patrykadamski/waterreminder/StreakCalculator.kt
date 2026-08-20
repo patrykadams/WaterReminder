@@ -20,4 +20,6 @@ object StreakCalculator {
         }
         return currentStreak
     }
+
+    fun dayWord(days: Int): String = if (days == 1) "dzień" else "dni"
 }
