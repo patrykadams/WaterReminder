@@ -40,7 +40,7 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
     var userWeight by mutableIntStateOf(prefs.getInt("user_weight", 70))
         private set
 
-    var quickAddAmount by mutableIntStateOf(prefs.getInt("quick_add_amount", 250))
+    var vesselSizes by mutableStateOf(VesselSizePrefs.load(prefs))
         private set
 
     var wakeUpHour by mutableIntStateOf(prefs.getInt("wake_up_hour", 8))
@@ -215,43 +215,49 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- ZAKTUALIZOWANA FUNKCJA: Zapisuje też Activity i częstotliwość przypomnień ---
+    // --- ZAKTUALIZOWANA FUNKCJA: Zapisuje też Activity, częstotliwość przypomnień i rozmiary naczyń ---
     fun saveSettings(
         newGoal: Int,
         newWeight: Int,
-        newQuickAdd: Int,
         newWakeUp: Int,
         newSleep: Int,
         newGender: String,
         newActivity: String,
-        newFrequency: String = reminderFrequency
+        newFrequency: String = reminderFrequency,
+        newVesselSizes: List<VesselSize> = vesselSizes
     ) {
+        // Zawsze musi zostać co najmniej jeden rozmiar - inaczej nie byłoby czym
+        // logować wody z głównego ekranu ani z powiadomienia.
+        val sanitizedVesselSizes = newVesselSizes.ifEmpty { VesselSizePrefs.DEFAULT_SIZES }
+        val primaryAmount = sanitizedVesselSizes.first().amountMl
+
         dailyGoal = newGoal
         userWeight = newWeight
-        quickAddAmount = newQuickAdd
         wakeUpHour = newWakeUp
         sleepHour = newSleep
         userGender = newGender
         userActivity = newActivity // Zapiszemy to
         reminderFrequency = newFrequency
+        vesselSizes = sanitizedVesselSizes
 
         // Bazowy interwał liczony tą samą funkcją co realny harmonogram w AlarmScheduler,
-        // żeby podgląd w UI nigdy się z nim nie rozjechał.
+        // żeby podgląd w UI nigdy się z nim nie rozjechał. Jako "typowej porcji" używamy
+        // pierwszego (głównego) rozmiaru naczynia z listy.
         val calculatedInterval = ReminderPacing.baseIntervalMinutes(
             wakeUpHour = newWakeUp,
             sleepHour = newSleep,
             dailyGoal = newGoal,
-            quickAddAmount = newQuickAdd,
+            quickAddAmount = primaryAmount,
             frequency = newFrequency
         )
 
         alertInterval = calculatedInterval
 
+        VesselSizePrefs.save(prefs, sanitizedVesselSizes)
         prefs.edit()
             .putInt("daily_goal", newGoal)
             .putInt("alert_interval", calculatedInterval)
             .putInt("user_weight", newWeight)
-            .putInt("quick_add_amount", newQuickAdd)
             .putInt("wake_up_hour", newWakeUp)
             .putInt("sleep_hour", newSleep)
             .putString("user_gender", newGender)
@@ -276,7 +282,6 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
         saveSettings(
             newGoal = goal,
             newWeight = weightKg,
-            newQuickAdd = quickAddAmount,
             newWakeUp = wakeUpHour,
             newSleep = sleepHour,
             newGender = userGender,

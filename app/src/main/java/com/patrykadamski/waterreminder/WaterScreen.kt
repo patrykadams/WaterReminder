@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.sp
 /**
  * Main dashboard screen updated to support Material You Dynamic Colors.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun WaterScreen(viewModel: WaterViewModel) {
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -90,16 +90,22 @@ fun WaterScreen(viewModel: WaterViewModel) {
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Actions using Material 3 button themes
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Button(
-                    onClick = { viewModel.addWater(viewModel.quickAddAmount) },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                ) {
-                    Text("+ ${viewModel.quickAddAmount} ml")
+            // Quick-add buttons, one per user-defined vessel size, plus Reset.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(horizontal = 24.dp)
+            ) {
+                viewModel.vesselSizes.forEach { size ->
+                    Button(
+                        onClick = { viewModel.addWater(size.amountMl) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    ) {
+                        Text("${size.name} +${size.amountMl}ml")
+                    }
                 }
 
                 OutlinedButton(

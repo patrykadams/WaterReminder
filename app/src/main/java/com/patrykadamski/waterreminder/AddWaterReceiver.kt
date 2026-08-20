@@ -14,7 +14,7 @@ import java.time.LocalDate
 class AddWaterReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val prefs = context.getSharedPreferences("water_prefs", Context.MODE_PRIVATE)
-        val amountToAdd = prefs.getInt("quick_add_amount", 250)
+        val amountToAdd = VesselSizePrefs.load(prefs).first().amountMl
 
         val dao = WaterDatabase.getDatabase(context).waterDao()
         val todayDate = LocalDate.now().toString()

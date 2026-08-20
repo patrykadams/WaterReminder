@@ -30,7 +30,8 @@ object AlarmScheduler {
             val entry = dao.getTodayWater(todayDate)
             val currentAmount = entry?.amount ?: 0
 
-            val quickAddAmount = prefs.getInt("quick_add_amount", 250)
+            // Traktujemy pierwszy (główny) rozmiar naczynia jako "typową porcję" do wyliczeń.
+            val quickAddAmount = VesselSizePrefs.load(prefs).first().amountMl
             val wakeUpHour = prefs.getInt("wake_up_hour", 8)
             val sleepHour = prefs.getInt("sleep_hour", 22)
             val frequency = prefs.getString("reminder_frequency", ReminderPacing.FREQUENCY_NORMAL)

@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -37,12 +39,13 @@ fun GoalSettingsDialog(viewModel: WaterViewModel, onDismiss: () -> Unit) {
     var frequencyIndex by remember {
         mutableStateOf(FREQUENCY_ORDER.indexOf(viewModel.reminderFrequency).coerceAtLeast(0))
     }
+    var vesselDrafts by remember { mutableStateOf(viewModel.vesselSizes.toDrafts()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Cel picia wody") },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 GoalEditorFields(
                     weightText = weightText,
                     onWeightTextChange = { weightText = it },
@@ -64,6 +67,12 @@ fun GoalSettingsDialog(viewModel: WaterViewModel, onDismiss: () -> Unit) {
                     steps = FREQUENCY_ORDER.size - 2,
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                Spacer(modifier = Modifier.height(16.dp))
+                VesselSizeEditor(
+                    sizes = vesselDrafts,
+                    onSizesChange = { vesselDrafts = it }
+                )
             }
         },
         confirmButton = {
@@ -73,12 +82,12 @@ fun GoalSettingsDialog(viewModel: WaterViewModel, onDismiss: () -> Unit) {
                 viewModel.saveSettings(
                     newGoal = goal,
                     newWeight = weightKg,
-                    newQuickAdd = viewModel.quickAddAmount,
                     newWakeUp = viewModel.wakeUpHour,
                     newSleep = viewModel.sleepHour,
                     newGender = viewModel.userGender,
                     newActivity = activityLevel,
-                    newFrequency = FREQUENCY_ORDER[frequencyIndex]
+                    newFrequency = FREQUENCY_ORDER[frequencyIndex],
+                    newVesselSizes = vesselDrafts.toVesselSizes()
                 )
                 onDismiss()
             }) { Text("Zapisz") }

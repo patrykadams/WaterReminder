@@ -39,7 +39,7 @@ class ReminderReceiver : BroadcastReceiver() {
     }
 
     private fun launchNotification(context: Context, prefs: android.content.SharedPreferences, currentAmount: Int) {
-        val quickAddAmount = prefs.getInt("quick_add_amount", 250)
+        val primaryVessel = VesselSizePrefs.load(prefs).first()
 
         val title = context.getString(R.string.water_reminder_notification_title)
         val text = context.resources.getStringArray(R.array.water_reminder_messages).random()
@@ -73,7 +73,7 @@ class ReminderReceiver : BroadcastReceiver() {
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-            .addAction(android.R.drawable.ic_input_add, "+$quickAddAmount ml", addWaterPendingIntent)
+            .addAction(android.R.drawable.ic_input_add, "${primaryVessel.name} +${primaryVessel.amountMl}ml", addWaterPendingIntent)
             .addAction(customAction)
             .setGroup("WATER_REMINDER_GROUP") // Optional now, since we overwrite
             .build()

@@ -22,7 +22,7 @@ class WaterTileService : TileService() {
         super.onClick()
 
         val prefs = getSharedPreferences("water_prefs", Context.MODE_PRIVATE)
-        val amountToAdd = prefs.getInt("quick_add_amount", 250)
+        val amountToAdd = VesselSizePrefs.load(prefs).first().amountMl
 
         val dao = WaterDatabase.getDatabase(applicationContext).waterDao()
         val todayDate = LocalDate.now().toString()
