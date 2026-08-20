@@ -40,14 +40,9 @@ class ReminderReceiver : BroadcastReceiver() {
 
     private fun launchNotification(context: Context, prefs: android.content.SharedPreferences, currentAmount: Int) {
         val quickAddAmount = prefs.getInt("quick_add_amount", 250)
-        val gender = prefs.getString("user_gender", "M") ?: "M"
-        val missedCount = prefs.getInt("missed_reminders_count", 0)
 
-        val (title, text) = getMotivationText(missedCount, gender, currentAmount)
-
-        if (currentAmount > 0) {
-            prefs.edit().putInt("missed_reminders_count", missedCount + 1).apply()
-        }
+        val title = context.getString(R.string.water_reminder_notification_title)
+        val text = context.resources.getStringArray(R.array.water_reminder_messages).random()
 
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         if (!powerManager.isInteractive) {
@@ -87,28 +82,5 @@ class ReminderReceiver : BroadcastReceiver() {
         notificationManager.notify(NOTIFICATION_ID, notification)
 
         AlarmScheduler.scheduleNextAlarm(context)
-    }
-
-    private fun getMotivationText(missedCount: Int, gender: String, currentAmount: Int): Pair<String, String> {
-        if (currentAmount == 0) {
-            return "Dzień dobry! ☀️" to "Hej, Twój dzień się zaczął! Dodaj pierwszą wodę, kiedy będziesz gotowy 💧"
-        }
-
-        val isFemale = gender == "K"
-        val facts = listOf("Głowa nie będzie boleć. 💆‍♀️", "Darmowa energia w 3.. 2.. 1.. ⚡", "Cera Ci podziękuje. ✨", "Nerki lubią to.")
-        val randomFact = facts.random()
-        return if (isFemale) {
-            when {
-                missedCount == 0 -> listOf("Kocham Cię! ❤️" to "Wypij szklankę wody. Dbaj o siebie.", "Jesteś Super! 🌟" to "Szybki łyk i wracamy do bycia super.", "Puk puk! 🚪" to "To ja, Twoja woda. Wpuścisz mnie?", "Czas na przerwę 🥤" to randomFact, "Nawadnianie! 💧" to "Zrób to dla zdrowia (i dla mnie).").random()
-                missedCount == 1 -> "Halo, tu Woda 🌊" to "Czuję się ignorowana... Napij się!"
-                else -> "Zamieniasz się w kaktusa 🌵" to "Serio, ile można czekać? Pij natychmiast!"
-            }
-        } else {
-            when {
-                missedCount == 0 -> listOf("Czas na wodę 💧" to randomFact, "Jesteś Super! 🔥" to "Utrzymaj dobrą passę.", "Łykamy? 🥤" to "Organizm woła o paliwo.").random()
-                missedCount == 1 -> "Halo? 🤨" to "Zapomniałeś o mnie. Nadrabiamy!"
-                else -> "Zaraz uschniesz 💀" to "Nie świruj, pij tę wodę."
-            }
-        }
     }
 }

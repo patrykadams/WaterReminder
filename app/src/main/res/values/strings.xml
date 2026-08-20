@@ -1,3 +1,15 @@
 <resources>
     <string name="app_name">WaterReminder</string>
+
+    <string name="water_reminder_notification_title">Przypomnienie o piciu wody</string>
+    <string-array name="water_reminder_messages">
+        <item>Czas na szklankę wody 💧</item>
+        <item>Nie zapomnij się dziś nawodnić.</item>
+        <item>Mała przerwa na wodę?</item>
+        <item>Pamiętaj o wodzie 💧</item>
+        <item>Dobry moment na łyk wody.</item>
+        <item>Zadbaj o nawodnienie.</item>
+        <item>Chwila przerwy — sięgnij po wodę.</item>
+        <item>Twój organizm doceni odrobinę wody.</item>
+    </string-array>
 </resources>
