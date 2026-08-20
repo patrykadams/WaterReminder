@@ -13,5 +13,6 @@ class BootReceiver : BroadcastReceiver() {
         if (!prefs.contains("next_alarm_time")) return
 
         AlarmScheduler.scheduleNextAlarm(context)
+        EveningSummaryScheduler.scheduleNext(context)
     }
 }

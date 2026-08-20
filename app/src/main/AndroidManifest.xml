@@ -31,6 +31,7 @@
         <receiver android:name=".ReminderReceiver" />
         <receiver android:name=".AddWaterReceiver" />
         <receiver android:name=".AddCustomWaterReceiver" />
+        <receiver android:name=".EveningSummaryReceiver" />
         <receiver
             android:name=".BootReceiver"
             android:exported="true">

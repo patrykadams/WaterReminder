@@ -132,6 +132,13 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
             }
             showOnboarding = !alreadyOnboarded && !hasPriorUsage
         }
+
+        // One-time bootstrap so users updating from a version without the evening
+        // summary get it scheduled too, without needing to touch settings or reboot.
+        // Independent of the daytime reminder's own scheduling below.
+        if (!prefs.contains("evening_summary_alarm_time")) {
+            EveningSummaryScheduler.scheduleNext(getApplication())
+        }
     }
 
     fun addWater(amount: Int) {
@@ -202,16 +209,7 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
     private fun recalculateStreak() {
         viewModelScope.launch {
             val history = dao.getAllHistory()
-            var currentStreak = 0
-            var checkDate = LocalDate.now()
-            val todayEntry = history.find { it.date == checkDate.toString() }
-            if (todayEntry != null && todayEntry.amount >= dailyGoal) currentStreak++
-            while (true) {
-                checkDate = checkDate.minusDays(1)
-                val entry = history.find { it.date == checkDate.toString() }
-                if (entry != null && entry.amount >= dailyGoal) currentStreak++ else break
-            }
-            streakDays = currentStreak
+            streakDays = StreakCalculator.calculate(history, dailyGoal)
         }
     }
 
@@ -266,6 +264,7 @@ class WaterViewModel(application: Application) : AndroidViewModel(application) {
             .apply()
 
         AlarmScheduler.scheduleNextAlarm(getApplication())
+        EveningSummaryScheduler.scheduleNext(getApplication()) // sleep hour may have changed
         viewModelScope.launch {
             delay(200)
             updateNextAlarmDisplay()
