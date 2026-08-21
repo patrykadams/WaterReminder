@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -16,6 +18,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -26,6 +30,7 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun WaterScreen(viewModel: WaterViewModel) {
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var customAmountText by remember { mutableStateOf("") }
     val snackbarHostState = remember { SnackbarHostState() }
 
     if (showSettingsDialog) {
@@ -150,6 +155,42 @@ fun WaterScreen(viewModel: WaterViewModel) {
                         ) {
                             Text("Cofnij ${viewModel.lastAddedAmount}ml", color = MaterialTheme.colorScheme.primary)
                         }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Custom amount, typed directly from the keyboard.
+                val customAmount = customAmountText.toIntOrNull()
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 24.dp)
+                ) {
+                    OutlinedTextField(
+                        value = customAmountText,
+                        onValueChange = { if (it.length <= 5 && it.all(Char::isDigit)) customAmountText = it },
+                        label = { Text("Własna ilość (ml)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = {
+                            if (customAmount != null && customAmount > 0) {
+                                viewModel.addWater(customAmount)
+                                customAmountText = ""
+                            }
+                        }),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            if (customAmount != null && customAmount > 0) {
+                                viewModel.addWater(customAmount)
+                                customAmountText = ""
+                            }
+                        },
+                        enabled = customAmount != null && customAmount > 0
+                    ) {
+                        Text("Dodaj")
                     }
                 }
 
