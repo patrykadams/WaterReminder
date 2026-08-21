@@ -6,20 +6,21 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 /**
- * Modern Material 3 Theme with Dynamic Color support.
- * Automatically adapts the app's palette to the user's wallpaper on Android 12+.
+ * Fixed white/blue Material 3 theme matching the app's icon. Dynamic color
+ * (deriving the palette from the device wallpaper) is available but off by
+ * default so the app keeps a consistent look across devices.
  */
 @Composable
 fun WaterReminderTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+ (S)
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -50,11 +51,28 @@ fun WaterReminderTheme(
 private val DarkColorScheme = darkColorScheme(
     primary = Blue80,
     secondary = BlueGrey80,
-    tertiary = Pink80
+    tertiary = LightBlue80,
+    primaryContainer = PrimaryContainerDark,
+    onPrimaryContainer = OnPrimaryContainerDark,
+    secondaryContainer = SecondaryContainerDark,
+    onSecondaryContainer = OnSecondaryContainerDark,
+    surfaceContainer = SurfaceContainerDark,
+    surfaceContainerHigh = SurfaceContainerHighDark
 )
 
 private val LightColorScheme = lightColorScheme(
     primary = Blue40,
     secondary = BlueGrey40,
-    tertiary = Pink40
+    tertiary = LightBlue40,
+    background = BackgroundWhite,
+    surface = SurfaceWhite,
+    onPrimary = Color.White,
+    onBackground = OnSurfaceDark,
+    onSurface = OnSurfaceDark,
+    primaryContainer = PrimaryContainerLight,
+    onPrimaryContainer = OnPrimaryContainerLight,
+    secondaryContainer = SecondaryContainerLight,
+    onSecondaryContainer = OnSecondaryContainerLight,
+    surfaceContainer = SurfaceContainerLight,
+    surfaceContainerHigh = SurfaceContainerHighLight
 )
