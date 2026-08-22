@@ -24,10 +24,12 @@ object VesselSizePrefs {
     private const val RECORD_SEPARATOR = ""
     private const val FIELD_SEPARATOR = ""
 
+    // Kept short on purpose - the main screen also has a free-text "custom
+    // amount" field now, so the default preset list doesn't need to cover
+    // every vessel size, just the couple of quickest, most common taps.
     val DEFAULT_SIZES = listOf(
         VesselSize(id = 1L, name = "Szklanka", amountMl = 200),
-        VesselSize(id = 2L, name = "Kubek", amountMl = 300),
-        VesselSize(id = 3L, name = "Butelka", amountMl = 500)
+        VesselSize(id = 2L, name = "Kubek", amountMl = 300)
     )
 
     fun load(prefs: SharedPreferences): List<VesselSize> {

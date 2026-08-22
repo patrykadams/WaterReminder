@@ -123,7 +123,7 @@ fun WaterScreen(viewModel: WaterViewModel) {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Quick-add buttons, one per user-defined vessel size, plus Reset.
+                // Row 1: quick-add buttons, one per user-defined vessel size.
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -140,7 +140,15 @@ fun WaterScreen(viewModel: WaterViewModel) {
                             Text("${size.name} +${size.amountMl}ml")
                         }
                     }
+                }
 
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Row 2: Reset / Cofnij.
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.padding(horizontal = 24.dp)
+                ) {
                     OutlinedButton(
                         onClick = { viewModel.resetWater() },
                         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
@@ -160,7 +168,7 @@ fun WaterScreen(viewModel: WaterViewModel) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Custom amount, typed directly from the keyboard.
+                // Row 3: custom amount, typed directly from the keyboard.
                 val customAmount = customAmountText.toIntOrNull()
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
